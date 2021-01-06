@@ -1,0 +1,6 @@
+Age	Sex	Disease	Ethnicity
+C00039	18	Male	Donor	African.American
+C00055	26	Male	Donor	African.American
+C00074	17	Male	Donor	African.American
+C00085	59	Female	Donor	African.American
+C00105	59	Female	Donor	African.American

@@ -7,6 +7,8 @@ require("tidyverse")
 require("pcaMethods")
 require("limma")
 require("biomaRt")
+require("WGCNA")
+library(rstudioapi)
 #------------------------#
 #-----Importing Data-----#
 #------------------------#
@@ -99,8 +101,8 @@ for (g in colnames(sampleInfo)) {
 group1 <- "Donor"
 group2 <- "DCM"
 
-subSampleInfo <- sampleInfo[which(sampleInfo$Disease == group1 | sampleInfo$Disease == group2), ]
-subGxData <- gxData[, which(sampleInfo$Disease == group1 | sampleInfo$Disease == group2)]
+#subSampleInfo <- sampleInfo[which(sampleInfo$Disease == group1 | sampleInfo$Disease == group2), ]
+#subGxData <- gxData[, which(sampleInfo$Disease == group1 | sampleInfo$Disease == group2)]
 
 
 # creating the design and contrast matrices.
@@ -134,7 +136,9 @@ resultsPPCM <- topTable(fit2, coef = 3, number = nrow(gxData), adjust.method = "
 paste("DCM/  Up: ", nrow(resultsDCM[which(resultsDCM$logFC > 0), ]), ";Down: ", nrow(resultsDCM[which(resultsDCM$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(resultsDCM))
 paste("HCM/  Up: ", nrow(resultsHCM[which(resultsHCM$logFC > 0), ]), ";Down: ", nrow(resultsHCM[which(resultsHCM$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(resultsHCM))
 paste("PPCM/  Up: ", nrow(resultsPPCM[which(resultsPPCM$logFC > 0), ]), ";Down: ", nrow(resultsPPCM[which(resultsPPCM$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(resultsPPCM))
-vennDiagram(results2)
+vennDiagram(resultsSimple)
+
+#
 #--------------------#
 #-----Annotation-----#
 #--------------------#
