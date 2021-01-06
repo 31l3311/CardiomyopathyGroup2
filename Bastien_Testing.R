@@ -80,15 +80,15 @@ pcaRes <- pca(t(gxData), nPcs = 10)
 plotData <- cbind(data.frame(pcaRes@scores), sampleInfo)
 for (g in colnames(sampleInfo)) {
   if (is.numeric(sampleInfo[, g]) == TRUE) {
-    pcaGroupPlot <- ggplot(plotData, aes_string("PC3", "PC4", color = g)) +
+    pcaGroupPlot <- ggplot(plotData, aes_string("PC1", "PC2", color = g)) +
       geom_point() +
       scale_color_gradient(low = "blue", high = "red")
   } else {
-    pcaGroupPlot <- ggplot(plotData, aes_string("PC3", "PC4", color = g)) +
+    pcaGroupPlot <- ggplot(plotData, aes_string("PC1", "PC2", color = g)) +
       geom_point()
   }
   print(pcaGroupPlot)
-  ggsave(filename = paste0("PCA_plot2_", g, ".png"), plot = pcaGroupPlot, path = outDir)
+  ggsave(filename = paste0("PCA_plot1_", g, ".png"), plot = pcaGroupPlot, path = outDir)
 }
 
 #------------------------------#
@@ -104,30 +104,37 @@ subGxData <- gxData[, which(sampleInfo$Disease == group1 | sampleInfo$Disease ==
 
 
 # creating the design and contrast matrices.
-disease <- droplevels(subSampleInfo$Disease)
-names(disease) <- row.names(subSampleInfo)
+disease <- droplevels(sampleInfo$Disease)
+names(disease) <- row.names(sampleInfo)
 
 # Note: based on the constructed PCA plots, ethnicity was determined to be a possible confounder to be included in the design.
 # Other variables of sampelInfo did not have a visible impact according to the PCA plots.
 # A different confounding variable can be selected by subsetting subSampleData with a different variable in the next line.
-confounder <- subSampleInfo$Ethnicity
-names(confounder) <- row.names(subSampleInfo)
+confounder <- sampleInfo$Ethnicity
+names(confounder) <- row.names(sampleInfo)
 
 design <- model.matrix(~ 0 + disease + confounder)
 colSums(design)
 
 cm <- makeContrasts(
-  contrast = diseaseDCM - diseaseDonor,
+  DCM_Donor = diseaseDCM - diseaseDonor,
+  HCM_Donor = diseaseHCM - diseaseDonor, 
+  PPCM_Donor = diseasePPCM - diseaseDonor, 
   levels = design
 )
-fit <- lmFit(subGxData, design)
+fit <- lmFit(gxData, design)
 fit2 <- contrasts.fit(fit, contrasts = cm)
 fit2 <- eBayes(fit2, trend = TRUE)
-results <- topTable(fit2, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
 
+resultsSimple <- decideTests(fit2)
+resultsDCM <- topTable(fit2, coef = 1, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
+resultsHCM <- topTable(fit2, coef = 2, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
+resultsPPCM <- topTable(fit2, coef = 3, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
 # Outputting the number of up and downregulated genes, as well as the number of non-significant genes.
-paste("Up: ", nrow(results[which(results$logFC > 0), ]), ";Down: ", nrow(results[which(results$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(results))
-
+paste("DCM/  Up: ", nrow(resultsDCM[which(resultsDCM$logFC > 0), ]), ";Down: ", nrow(resultsDCM[which(resultsDCM$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(resultsDCM))
+paste("HCM/  Up: ", nrow(resultsHCM[which(resultsHCM$logFC > 0), ]), ";Down: ", nrow(resultsHCM[which(resultsHCM$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(resultsHCM))
+paste("PPCM/  Up: ", nrow(resultsPPCM[which(resultsPPCM$logFC > 0), ]), ";Down: ", nrow(resultsPPCM[which(resultsPPCM$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(resultsPPCM))
+vennDiagram(results2)
 #--------------------#
 #-----Annotation-----#
 #--------------------#
