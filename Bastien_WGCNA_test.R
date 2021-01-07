@@ -40,7 +40,7 @@ data.log <- as.data.frame(t(as.matrix(data.log)))
 
 
 
-traitData = read.table("test_sample_data.txt", header=TRUE);
+traitData = read.table("MAGNET_SampleData_19112020.txt", header=TRUE, row.names = 1);
 
 data.filtered.dcm = data.log[row.names(data.log) %in% row.names(traitData),]
 
@@ -57,7 +57,9 @@ datTraits[datTraits=="Female"]<-1
 datTraits[datTraits=="Donor"]<-0
 datTraits[datTraits=="DCM"]<-1
 datTraits[datTraits=="HCM"]<-2
-datTraits[datTraits=="African.American"]<-2
+datTraits[datTraits=="PPCM"]<-3
+datTraits[datTraits=="Caucasian"]<-0
+datTraits[datTraits=="African.American"]<-1
 datTraits <- mutate_all(datTraits, function(x) as.numeric(as.character(x)))
 
 collectGarbage();
@@ -87,7 +89,7 @@ save(data.filtered.dcm, datTraits, file = "WGCNA-input.RData")
 
 
 #########################################
-Network construction and module detection
+#Network construction and module detection
 #########################################
 
 
@@ -110,7 +112,7 @@ powers = seq(1,15, by=2)
 # Call the network topology analysis function
 sft = pickSoftThreshold(data.filtered.dcm, powerVector = powers, verbose = 5)
 
-#save(sft, file = "WGCNA-sft.RData")
+save(sft, file = "WGCNA-sft.RData")
 
 # Plot the results:
 sizeGrWindow(9, 5)
@@ -131,18 +133,19 @@ plot(sft$fitIndices[,1], sft$fitIndices[,5], xlab="Soft Threshold (power)",ylab=
 text(sft$fitIndices[,1], sft$fitIndices[,5], labels=powers, cex=cex1,col="red")
 
 
-
+tic <- Sys.time()
 # looking at both - soft threshold and mean connectivity 
 # I decided to go with power 6 for this small example dataset
-net = blockwiseModules(data.filtered.dcm, power = 6,
+net = blockwiseModules(data.filtered.dcm, power = 7,
                        TOMType = "unsigned", minModuleSize = 30,
                        reassignThreshold = 0, mergeCutHeight = 0.25,
                        numericLabels = TRUE, pamRespectsDendro = FALSE,
                        saveTOMs = TRUE,
                        saveTOMFileBase = "expTOM", 
                        verbose = 3)
-
-#save(net, file = "WGCNA-net.RData")
+tac <- Sys.time()
+tac-tic
+save(net, file = "WGCNA-net.RData")
 
 
 
@@ -240,7 +243,7 @@ names(GSPvalue) = paste("p.GS.", names(disease), sep="");
 
 
 #module = "red"
-module = "yellow"
+module = "turquoise"
 #module = "brown"
 column = match(module, modNames);
 moduleGenes = moduleColors==module;

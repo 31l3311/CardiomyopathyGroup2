@@ -133,12 +133,14 @@ resultsDCM <- topTable(fit2, coef = 1, number = nrow(gxData), adjust.method = "B
 resultsHCM <- topTable(fit2, coef = 2, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
 resultsPPCM <- topTable(fit2, coef = 3, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
 # Outputting the number of up and downregulated genes, as well as the number of non-significant genes.
-paste("DCM/  Up: ", nrow(resultsDCM[which(resultsDCM$logFC > 0), ]), ";Down: ", nrow(resultsDCM[which(resultsDCM$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(resultsDCM))
-paste("HCM/  Up: ", nrow(resultsHCM[which(resultsHCM$logFC > 0), ]), ";Down: ", nrow(resultsHCM[which(resultsHCM$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(resultsHCM))
-paste("PPCM/  Up: ", nrow(resultsPPCM[which(resultsPPCM$logFC > 0), ]), ";Down: ", nrow(resultsPPCM[which(resultsPPCM$logFC < 0), ]), ";non-sig: ", nrow(subGxData) - nrow(resultsPPCM))
+paste("DCM/  Up: ", nrow(resultsDCM[which(resultsDCM$logFC > 0), ]), ";Down: ", nrow(resultsDCM[which(resultsDCM$logFC < 0), ]), ";non-sig: ", nrow(gxData) - nrow(resultsDCM))
+paste("HCM/  Up: ", nrow(resultsHCM[which(resultsHCM$logFC > 0), ]), ";Down: ", nrow(resultsHCM[which(resultsHCM$logFC < 0), ]), ";non-sig: ", nrow(gxData) - nrow(resultsHCM))
+paste("PPCM/  Up: ", nrow(resultsPPCM[which(resultsPPCM$logFC > 0), ]), ";Down: ", nrow(resultsPPCM[which(resultsPPCM$logFC < 0), ]), ";non-sig: ", nrow(gxData) - nrow(resultsPPCM))
 vennDiagram(resultsSimple)
 
-#
+degList <- row.names(gxData) %in% row.names(resultsDCM) | row.names(gxData) %in% row.names(resultsHCM) | row.names(gxData) %in% row.names(resultsPPCM)
+gxDataDEG <- gxData[degList,]
+write.table(gxDataDEG, file = "test_data.txt", sep = "\t", quote = FALSE, row.names = TRUE)
 #--------------------#
 #-----Annotation-----#
 #--------------------#
@@ -193,6 +195,39 @@ names(medianGenes) <- colnames(gxData_fpkm[, which(sampleInfo$Sex == "Female")])
 medianNoiseGene <- names(table(medianGenes))[as.vector(table(medianGenes)) == max(table(medianGenes))]
 
 avgCpmNoise <- apply(gxData[medianNoiseGene, which(sampleInfo$Sex == "Female")], 1, FUN = mean)
+
+# Calculating the mean expression of all genes and testing for noise
+meanCpm <- apply(gxData, 1, FUN = mean)
+noiseTestAll <- meanCpm > avgCpmNoise
+
+#Removing too low genes based on noise
+gxDataClean <- gxData[noiseTestAll,]
+
+#flagging genes based on CEFIC rules -> no genes flagged so nice data
+matCounts <- as.matrix(gxData)
+diseases <- levels(sampleInfo$Disease)
+bad <- NULL
+for (gene in row.names(gxData)){
+  GroupsPass<-checkSpike<-NULL
+  for (s in diseases){
+    Samples <- colnames(gxData[,which(sampleInfo[,3] == s)])
+    Check <- sum(gxData[gene,Samples] >= 1) >= 0.75*length(Samples) 
+    if (Check == FALSE){checkSpike <- c(checkSpike, TRUE)}
+    else {
+      one <- max(matCounts[gene,Samples]) - median(matCounts[gene,Samples])
+      two <- sum(matCounts[gene,Samples])/(ncol(matCounts[gene,Samples])-1)
+      test <- one > two
+      if (isTRUE(test)) {checkSpike <- c(checkSpike, TRUE)}
+      else{checkSpike <- c(checkSpike, FALSE)}
+    }
+  }
+  if (sum(checkSpike) >= 1){bad <- c(bad, "flagged")}
+  else {bad <- c(bad,"OK")}
+}
+#barplot
+gene_to_plot <- "ENSG00000000003"
+gene_count <- as.matrix(subset(gxData, rownames(gxData) == gene_to_plot))
+barplot(gene_count, las=2, cex.names = 0.6)
 
 # Calculating the mean expression of DEGs and testing for noise
 meanCpm <- apply(gxData[row.names(results2), ], 1, FUN = mean)
