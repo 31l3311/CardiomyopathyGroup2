@@ -20,7 +20,7 @@
 #----------------------------------------------------------------------------------------------------------------------------#
 # 
 # Note: 'Un-comment' following code if packages are not installed (and change 
-#       'setRepositories()' from FALSE to TRUE if necessary).
+#       'setRepositories()' from FALSE to TRUE if necessary):
 #
 # setRepositories(FALSE, 1:10)                                                                                               
 # install.packages(c('ggplot2', 'limma', 'pcaMethods', 'biomaRt','vioplot', 'gtools', 'arsenal', 'tidyr', 'qvalue','dplyr')) 
@@ -250,7 +250,7 @@ for (i in 1:ncol(fit_contrast)) {
 
 # Use the 'topTable()' function to generate summary statistics of the linear model. 
 # The adj.P.val column in the output contains p-values adjusted for multiple testing.
-# The adjusted p-values are computed with teh Benjamini and Hochberg's (BH) method 
+# The adjusted p-values are computed with the Benjamini and Hochberg's (BH) method 
 # which controls for the false discovery rate (i.e. the proportion of false positives 
 # when a test is called significant based on the p-value).
 # NOTE: these adjusted p-values are otherwise known as q-values. 
@@ -265,7 +265,7 @@ gxTop <- gxData[modelstat_summary$adj.P.Val < 0.05, ]
 
 
 # Note: the following 2 steps are not vital to the script. However, it 
-#       might come in handy if you want to combine the two data sets later.
+#       might come in handy if you want to combine the two datasets later.
 
 # Adjust the summary statistics table such that its rows match the gxData
 
@@ -293,7 +293,7 @@ all(rownames(modelstat_summary) == rownames(gxData)) #TRUE
 # The annotion is going to be based on the gene identifiers in the 
 # Ensembl database.The first step is to use 'listMarts()' which provides a list 
 # of available databases. Here you can check the exact title that you need to 
-# connect to the Enseble database. Because this list contains only a few items
+# connect to the Ensembl database. Because this list contains only a few items
 # you can inspect it in your console. 
 
 listMarts() 
