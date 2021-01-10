@@ -16,3 +16,6 @@ WGCNA-input.RData
 WGCNA-net.RData
 WGCNA-sft.RData
 test_data.txt
+DEG_overlapDCMHCM.txt
+DEG_overlap.txt
+DEG_overlap2.txt

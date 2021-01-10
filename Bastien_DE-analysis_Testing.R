@@ -7,8 +7,7 @@ require("tidyverse")
 require("pcaMethods")
 require("limma")
 require("biomaRt")
-require("WGCNA")
-library(rstudioapi)
+
 #------------------------#
 #-----Importing Data-----#
 #------------------------#
@@ -82,15 +81,15 @@ pcaRes <- pca(t(gxData), nPcs = 10)
 plotData <- cbind(data.frame(pcaRes@scores), sampleInfo)
 for (g in colnames(sampleInfo)) {
   if (is.numeric(sampleInfo[, g]) == TRUE) {
-    pcaGroupPlot <- ggplot(plotData, aes_string("PC1", "PC2", color = g)) +
+    pcaGroupPlot <- ggplot(plotData, aes_string("PC7", "PC8", color = g)) +
       geom_point() +
       scale_color_gradient(low = "blue", high = "red")
   } else {
-    pcaGroupPlot <- ggplot(plotData, aes_string("PC1", "PC2", color = g)) +
+    pcaGroupPlot <- ggplot(plotData, aes_string("PC7", "PC8", color = g)) +
       geom_point()
   }
   print(pcaGroupPlot)
-  ggsave(filename = paste0("PCA_plot1_", g, ".png"), plot = pcaGroupPlot, path = outDir)
+  ggsave(filename = paste0("PCA_plot3_", g, ".png"), plot = pcaGroupPlot, path = outDir)
 }
 
 #------------------------------#
@@ -106,22 +105,27 @@ group2 <- "DCM"
 
 
 # creating the design and contrast matrices.
-disease <- droplevels(sampleInfo$Disease)
+disease_ <- droplevels(sampleInfo$Disease)
+disease_ <- relevel(disease_, "Donor")
 names(disease) <- row.names(sampleInfo)
 
 # Note: based on the constructed PCA plots, ethnicity was determined to be a possible confounder to be included in the design.
 # Other variables of sampelInfo did not have a visible impact according to the PCA plots.
 # A different confounding variable can be selected by subsetting subSampleData with a different variable in the next line.
-confounder <- sampleInfo$Ethnicity
-names(confounder) <- row.names(sampleInfo)
-
-design <- model.matrix(~ 0 + disease + confounder)
+# ethnicity_ <- droplevels(sampleInfo$Ethnicity)
+# names(confounder1) <- row.names(sampleInfo)
+# sex_ <- droplevels(sampleInfo$Sex)
+# names(confounder2) <- row.names(sampleInfo)
+disease.sex <- paste(sampleInfo$Disease, sampleInfo$Sex, sep = ".")
+design <- model.matrix(~ 0 + disease.sex + ethnicity_  )
 colSums(design)
 
 cm <- makeContrasts(
-  DCM_Donor = diseaseDCM - diseaseDonor,
-  HCM_Donor = diseaseHCM - diseaseDonor, 
-  PPCM_Donor = diseasePPCM - diseaseDonor, 
+  DCM_Donor = (disease.sexDCM.Female + disease.sexDCM.Male) - (disease.sexDonor.Female + disease.sexDonor.Male),
+  HCM_Donor = (disease.sexHCM.Female + disease.sexHCM.Male) - (disease.sexDonor.Female + disease.sexDonor.Male), 
+  PPCM_Donor = disease.sexPPCM.Female - disease.sexDonor.Female, 
+  InteractionDCM = (disease.sexDCM.Female - disease.sexDCM.Male) - (disease.sexDonor.Female - disease.sexDonor.Male),
+  InteractionHCM = (disease.sexHCM.Female - disease.sexHCM.Male) - (disease.sexDonor.Female - disease.sexDonor.Male),
   levels = design
 )
 fit <- lmFit(gxData, design)
@@ -132,15 +136,24 @@ resultsSimple <- decideTests(fit2)
 resultsDCM <- topTable(fit2, coef = 1, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
 resultsHCM <- topTable(fit2, coef = 2, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
 resultsPPCM <- topTable(fit2, coef = 3, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
+resultsInteractionDCM <- topTable(fit2, coef = 4, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
+resultsInteractionHCM <- topTable(fit2, coef = 5, number = nrow(gxData), adjust.method = "BH", p.value = 0.05)
 # Outputting the number of up and downregulated genes, as well as the number of non-significant genes.
 paste("DCM/  Up: ", nrow(resultsDCM[which(resultsDCM$logFC > 0), ]), ";Down: ", nrow(resultsDCM[which(resultsDCM$logFC < 0), ]), ";non-sig: ", nrow(gxData) - nrow(resultsDCM))
 paste("HCM/  Up: ", nrow(resultsHCM[which(resultsHCM$logFC > 0), ]), ";Down: ", nrow(resultsHCM[which(resultsHCM$logFC < 0), ]), ";non-sig: ", nrow(gxData) - nrow(resultsHCM))
 paste("PPCM/  Up: ", nrow(resultsPPCM[which(resultsPPCM$logFC > 0), ]), ";Down: ", nrow(resultsPPCM[which(resultsPPCM$logFC < 0), ]), ";non-sig: ", nrow(gxData) - nrow(resultsPPCM))
-vennDiagram(resultsSimple)
+paste("InteractionDCM/  Up: ", nrow(resultsInteractionDCM[which(resultsInteractionDCM$logFC > 0), ]), ";Down: ", nrow(resultsInteractionDCM[which(resultsInteractionDCM$logFC < 0), ]), ";non-sig: ", nrow(gxData) - nrow(resultsInteractionDCM))
+paste("InteractionHCM/  Up: ", nrow(resultsInteractionHCM[which(resultsInteractionHCM$logFC > 0), ]), ";Down: ", nrow(resultsInteractionHCM[which(resultsInteractionHCM$logFC < 0), ]), ";non-sig: ", nrow(gxData) - nrow(resultsInteractionHCM))
+vennDiagram(resultsSimple[,c(1:3)])
 
 degList <- row.names(gxData) %in% row.names(resultsDCM) | row.names(gxData) %in% row.names(resultsHCM) | row.names(gxData) %in% row.names(resultsPPCM)
 gxDataDEG <- gxData[degList,]
 write.table(gxDataDEG, file = "test_data.txt", sep = "\t", quote = FALSE, row.names = TRUE)
+
+degOverlap <- rownames(gxData[row.names(gxData) %in% row.names(resultsDCM) & row.names(gxData) %in% row.names(resultsHCM) & row.names(gxData) %in% row.names(resultsPPCM),])
+write(degOverlap, file = "DEG_overlap.txt")
+degOverlapDCMHCM <- rownames(gxData[row.names(gxData) %in% row.names(resultsDCM) & row.names(gxData) %in% row.names(resultsHCM),])
+write(degOverlapDCMHCM, file = "DEG_overlapDCMHCM.txt")
 #--------------------#
 #-----Annotation-----#
 #--------------------#
