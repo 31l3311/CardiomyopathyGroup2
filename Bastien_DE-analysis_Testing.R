@@ -105,14 +105,12 @@ group2 <- "DCM"
 
 
 # creating the design and contrast matrices.
-disease_ <- droplevels(sampleInfo$Disease)
-disease_ <- relevel(disease_, "Donor")
-names(disease) <- row.names(sampleInfo)
+
 
 # Note: based on the constructed PCA plots, ethnicity was determined to be a possible confounder to be included in the design.
 # Other variables of sampelInfo did not have a visible impact according to the PCA plots.
 # A different confounding variable can be selected by subsetting subSampleData with a different variable in the next line.
-# ethnicity_ <- droplevels(sampleInfo$Ethnicity)
+ ethnicity_ <- droplevels(sampleInfo$Ethnicity)
 # names(confounder1) <- row.names(sampleInfo)
 # sex_ <- droplevels(sampleInfo$Sex)
 # names(confounder2) <- row.names(sampleInfo)
@@ -154,6 +152,27 @@ degOverlap <- rownames(gxData[row.names(gxData) %in% row.names(resultsDCM) & row
 write(degOverlap, file = "DEG_overlap.txt")
 degOverlapDCMHCM <- rownames(gxData[row.names(gxData) %in% row.names(resultsDCM) & row.names(gxData) %in% row.names(resultsHCM),])
 write(degOverlapDCMHCM, file = "DEG_overlapDCMHCM.txt")
+
+#making a table of results for all comparaisons
+#First We need to get all the p.values and adjust for multiple comparaisons
+pVal <- fit2$p.value
+qval <- apply(pVal, 2, p.adjust, method = "BH")
+
+#A dummy topTable is then called to get logFC values even for non-signifficant genes
+logFC <- list()
+for (n in c(1:5)){
+  dummyTable <- topTable(fit2, coef = n, number = nrow(gxData), adjust.method = "BH", p.value = 1)
+  logFC[[n]] <- dummyTable$logFC
+}
+remove(dummyTable)
+
+resultsAll <- data.frame(logFC[[1]],pVal[,1],qval[,1],logFC[[2]],pVal[,2],qval[,2],
+                         logFC[[3]],pVal[,3],qval[,3],logFC[[4]],pVal[,4],qval[,4],
+                         logFC[[5]],pVal[,5],qval[,5])
+colnames(resultsAll) <- c("logFC_DCM","pvalue_DCM","qvalue_DCM","logFC_HCM","pvalue_HCM","qvalue_HCM",
+                          "logFC_PPCM","pvalue_PPCM","qvalue_PPC","logFC_SexDCM","pvalue_SexDCM","qvalue_SexDCM",
+                          "logFC_SexHCM","pvalue_SexHCM","qvalue_SexHCM")
+write.table(resultsAll, file = "results_all.txt", row.names = TRUE, quote = FALSE, sep ="\t")
 #--------------------#
 #-----Annotation-----#
 #--------------------#
@@ -243,7 +262,7 @@ gene_count <- as.matrix(subset(gxData, rownames(gxData) == gene_to_plot))
 barplot(gene_count, las=2, cex.names = 0.6)
 
 # Calculating the mean expression of DEGs and testing for noise
-meanCpm <- apply(gxData[row.names(results2), ], 1, FUN = mean)
+meanCpm <- apply(gxData[row.names(resultsSimple), ], 1, FUN = mean)
 noiseTest <- meanCpm > avgCpmNoise
 
 #-------------------------------#
@@ -253,13 +272,11 @@ noiseTest <- meanCpm > avgCpmNoise
 # Getting the mean expression of DEGs for both groups in cpm and FPKM
 meanCmpDonor <- apply(gxData[row.names(results2), which(sampleInfo$Disease == group1)], 1, FUN = mean)
 meanCmpDisease <- apply(gxData[row.names(results2), which(sampleInfo$Disease == group2)], 1, FUN = mean)
-meanFpkmDonor <- apply(gxData_fpkm[row.names(results2), which(sampleInfo$Disease == group1)], 1, FUN = mean)
-meanFpkmDisease <- apply(gxData_fpkm[row.names(results2), which(sampleInfo$Disease == group2)], 1, FUN = mean)
 
 # Assembling the results in one table
 resultsFinal <- data.frame(
   rownames(results2), results2$hgnc_symbol, results2$external_gene_name, results2$description, meanCmpDonor,
-  meanCmpDisease, results2$logFC, results2$adj.P.Val, noiseTest, meanFpkmDonor, meanFpkmDisease
+  meanCmpDisease, results2$logFC, results2$adj.P.Val, noiseTest
 )
 
 colnames(resultsFinal) <- c(
