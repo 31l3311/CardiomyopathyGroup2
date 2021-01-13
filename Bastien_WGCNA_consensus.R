@@ -299,7 +299,7 @@ bnet = blockwiseConsensusModules(
   mergeCutHeight = 0.25, numericLabels = TRUE,
   minKMEtoStay = 0,
   saveTOMs = TRUE, verbose = 5)
-
+save(bnet, file = "WGCNA-net.RData")
 consMEs = bnet$multiMEs
 moduleLabels = bnet$colors;
 moduleColors = labels2colors(moduleLabels)
@@ -634,3 +634,24 @@ for (n in c(1:length(modulesOfInterests))){
   percDEG[n] <- round(nDEG[n] / nrow(info[which(info$ModuleColor == modulesOfInterests[n]),]) * 100, digits = 1)
   print(paste0("Number of DEGs in ", modulesOfInterests[n] ," module (percentage) ",nDEG[n],"(",percDEG[n],")"))
 }
+
+################
+#Cytoscape 
+################
+modules = c("red");
+# Select module probes
+probes = rownames(data)
+inModule = is.finite(match(moduleColors, modules));
+modProbes = probes[inModule];
+# Select the corresponding Topological Overlap
+modTOM = TOM[inModule, inModule];
+dimnames(modTOM) = list(modProbes, modProbes)
+# Export the network into edge and node list files Cytoscape can read
+cyt = exportNetworkToCytoscape(modTOM,
+                               edgeFile = paste("CytoscapeInput-edges-", paste(modules, collapse="-"), ".txt", sep=""),
+                               nodeFile = paste("CytoscapeInput-nodes-", paste(modules, collapse="-"), ".txt", sep=""),
+                               weighted = TRUE,
+                               threshold = 0.1,
+                               nodeNames = modProbes,
+                               nodeAttr = moduleColors[inModule])
+
