@@ -1,17 +1,34 @@
-#=====================================================================================
+#######################################################################################
+#======================================================================================
+# 
+# WGCNA analysis
+# PRO4002:Project 1, group 2.
+# Author: Bastien Nihant
+# Date of last update: 14-01-2021
 #
-#  Code chunk 1
-#
-#=====================================================================================
+#======================================================================================
+#######################################################################################
 
 
 # Display the current working directory
 getwd();
+setwd("D:/Documents/Github/Research_project_1/CardiomyopathyGroup2")
+
 # Load the package
 library(WGCNA);
 library(dplyr)
 # The following setting is important, do not omit.
 options(stringsAsFactors = FALSE);
+#Enable multi-threading if the tool used for R supports it.
+enableWGCNAThreads()
+#=====================================================================================
+#
+#  Opening data files
+#
+#=====================================================================================
+
+
+
 #Read the entire data set
 data <- read.delim("D:/Documents/Github/Research_project_1/MAGNET_GeneExpressionData_CPM_19112020.txt", row.names = 1)
 #read the entire metadata
@@ -23,7 +40,7 @@ names(data)
 
 #=====================================================================================
 #
-#  Code chunk 2
+#  Setting up the expression data in a usable format
 #
 #=====================================================================================
 
@@ -48,7 +65,7 @@ exprSize = checkSets(multiExpr)
 
 #=====================================================================================
 #
-#  Code chunk 3
+#  Checking for for missing values, removing samples with excessive NAs
 #
 #=====================================================================================
 
@@ -56,13 +73,6 @@ exprSize = checkSets(multiExpr)
 # Check that all genes and samples have sufficiently low numbers of missing values.
 gsg = goodSamplesGenesMS(multiExpr, verbose = 3);
 gsg$allOK
-
-
-#=====================================================================================
-#
-#  Code chunk 4
-#
-#=====================================================================================
 
 
 if (!gsg$allOK)
@@ -86,7 +96,7 @@ if (!gsg$allOK)
 
 #=====================================================================================
 #
-#  Code chunk 5
+#  Creating the sample clustering tree for each set
 #
 #=====================================================================================
 
@@ -98,14 +108,8 @@ for (set in 1:nSets)
 }
 
 
-#=====================================================================================
-#
-#  Code chunk 6
-#
-#=====================================================================================
 
-
-pdf(file = "SampleClustering.pdf", width = 12, height = 12);
+pdf(file = "Results/SampleClustering.pdf", width = 12, height = 12);
 par(mfrow=c(2,1))
 par(mar = c(0, 4, 2, 0))
 for (set in 1:nSets)
@@ -116,12 +120,12 @@ dev.off();
 
 #=====================================================================================
 #
-#  Code chunk 7
+#  Removing outliers. This step was skipped.
 #
 #=====================================================================================
 
 # 
-# # Choose the "base" cut height for the female data set
+# # Choose the "base" cut height for the first data set
 # baseHeight = 16
 # # Adjust the cut height for the male data set for the number of samples
 # cutHeights = c(16, 16*exprSize$nSamples[2]/exprSize$nSamples[1]);
@@ -138,11 +142,6 @@ dev.off();
 # dev.off();
 
 
-#=====================================================================================
-#
-#  Code chunk 8
-#
-#=====================================================================================
 
 # 
 # for (set in 1:nSets)
@@ -161,7 +160,7 @@ dev.off();
 
 #=====================================================================================
 #
-#  Code chunk 9
+#  Setting up the metadata in a usable format
 #
 #=====================================================================================
 
@@ -201,21 +200,21 @@ nSamples = exprSize$nSamples;
 
 #=====================================================================================
 #
-#  Code chunk 10
+#  Saving the usable files to avoid having to re-run the previous part
 #
 #=====================================================================================
 
 
 save(multiExpr, Traits, nGenes, nSamples, setLabels, shortLabels, exprSize, 
-     file = "Consensus-dataInput.RData");
+     file = "Intermediate_data/Consensus-dataInput.RData");
 #=====================================================================================
 #
-#  Code chunk 1
+#  Loading data from the previous part
 #
 #=====================================================================================
 
 # Load the data saved in the first part
-lnames = load(file = "Consensus-dataInput.RData");
+lnames = load(file = "Intermediate_data/Consensus-dataInput.RData");
 # The variable lnames contains the names of loaded variables.
 lnames
 # Get the number of sets in the multiExpr structure.
@@ -224,7 +223,7 @@ nSets = checkSets(multiExpr)$nSets
 
 #=====================================================================================
 #
-#  Code chunk 2
+# Choosing thresholding power.
 #
 #=====================================================================================
 
@@ -256,7 +255,7 @@ for (set in 1:nSets)
 }
 # Plot the quantities in the chosen columns vs. the soft thresholding power
 sizeGrWindow(8, 6)
-pdf(file = "scaleFreeAnalysis.pdf", wi = 8, he = 6);
+pdf(file = "Results/scaleFreeAnalysis.pdf", wi = 8, he = 6);
 par(mfcol = c(2,2));
 par(mar = c(4.2, 4.2 , 2.2, 0.5))
 cex1 = 0.7;
@@ -287,7 +286,7 @@ dev.off();
 
 #=====================================================================================
 #
-#  Code chunk 3
+#  Running Blockwise consensus analysis.
 #
 #=====================================================================================
 
@@ -298,33 +297,32 @@ bnet = blockwiseConsensusModules(
   pamRespectsDendro = FALSE, 
   mergeCutHeight = 0.25, numericLabels = TRUE,
   minKMEtoStay = 0,
-  saveTOMs = TRUE, verbose = 5)
-save(bnet, file = "WGCNA-net.RData")
+  saveIndividualTOMs = TRUE, 
+  saveConsensusTOMs = TRUE, verbose = 5)
+save(bnet, file = "Intermediate_data/WGCNA-net.RData")
 consMEs = bnet$multiMEs
 moduleLabels = bnet$colors;
 moduleColors = labels2colors(moduleLabels)
 consTree = bnet$dendrograms[[1]];
 #=====================================================================================
 #
-#  Code chunk 4
+#  Loading data from the blockwise analysis.
 #
 #=====================================================================================
 # 
 # 
-# load(file = "Consensus-NetworkConstruction-auto.RData")
+load(file = "Intermediate_data/WGCNA-net.RData")
 bwLabels = matchLabels(bnet$colors, bnet$colors, pThreshold = 1e-7);
 bwColors = labels2colors(bwLabels)
 
-# #=====================================================================================
-# #
-# #  Code chunk 5
-# #
-# #=====================================================================================
-# 
-# 
-# # Here we show a more flexible way of plotting several trees and colors on one page
+#=====================================================================================
+#
+# Examining the blockwise dendograms.
+#
+#=====================================================================================
+
 sizeGrWindow(12,6)
-pdf(file = "BlockwiseGeneDendrosAndColors.pdf", wi = 12, he = 6);
+pdf(file = "Results/BlockwiseGeneDendrosAndColors.pdf", wi = 12, he = 6);
 # Use the layout function for more involved screen sectioning
 layout(matrix(c(1:4), 2, 2), heights = c(0.8, 0.2), widths = c(1,1))
 #layout.show(4);
@@ -386,7 +384,7 @@ dev.off();
 
 #=====================================================================================
 #
-#  Code chunk 2
+#  Calculating Module-trait correlations.
 #
 #=====================================================================================
 
@@ -404,7 +402,7 @@ for (set in 1:nSets)
 
 #=====================================================================================
 #
-#  Code chunk 3
+#  Plotting heatmaps of module-traits relationships
 #
 #=====================================================================================
 
@@ -414,7 +412,7 @@ MEColors = labels2colors(as.numeric(substring(names(consMEs[[1]]$data), 3)));
 MEColorNames = paste("ME", MEColors, sep="");
 # Open a suitably sized window (the user should change the window size if necessary)
 sizeGrWindow(10,7)
-pdf(file = "ModuleTraitRelationships-DCM.pdf", wi = 10, he = 7);
+pdf(file = "Results/ModuleTraitRelationships-DCM.pdf", wi = 10, he = 7);
 # Plot the module-trait relationship table for set number 1
 set = 1
 textMatrix =  paste(signif(moduleTraitCor[[set]], 2), "\n(",
@@ -439,7 +437,7 @@ textMatrix =  paste(signif(moduleTraitCor[[set]], 2), "\n(",
                     signif(moduleTraitPvalue[[set]], 1), ")", sep = "");
 dim(textMatrix) = dim(moduleTraitCor[[set]])
 sizeGrWindow(10,7)
-pdf(file = "ModuleTraitRelationships-HCM.pdf", wi = 10, he = 7);
+pdf(file = "Results/ModuleTraitRelationships-HCM.pdf", wi = 10, he = 7);
 par(mar = c(6, 8.8, 3, 2.2));
 labeledHeatmap(Matrix = moduleTraitCor[[set]],
                xLabels = names(Traits[[set]]$data),
@@ -460,7 +458,7 @@ textMatrix =  paste(signif(moduleTraitCor[[set]], 2), "\n(",
                     signif(moduleTraitPvalue[[set]], 1), ")", sep = "");
 dim(textMatrix) = dim(moduleTraitCor[[set]])
 sizeGrWindow(10,7)
-pdf(file = "ModuleTraitRelationships-PPCM.pdf", wi = 10, he = 7);
+pdf(file = "Results/ModuleTraitRelationships-PPCM.pdf", wi = 10, he = 7);
 par(mar = c(6, 8.8, 3, 2.2));
 labeledHeatmap(Matrix = moduleTraitCor[[set]],
                xLabels = names(Traits[[set]]$data),
@@ -477,7 +475,7 @@ dev.off();
 
 #=====================================================================================
 #
-#  Code chunk 4
+#  Calculating consensus module-traits correlations.
 #
 #=====================================================================================
 
@@ -497,7 +495,7 @@ consensusPvalue[positive] = pmax(moduleTraitPvalue[[1]][positive], moduleTraitPv
 
 #=====================================================================================
 #
-#  Code chunk 5
+#  Plotting consensus module-traits correlations.
 #
 #=====================================================================================
 
@@ -506,7 +504,7 @@ textMatrix =  paste(signif(consensusCor, 2), "\n(",
                     signif(consensusPvalue, 1), ")", sep = "");
 dim(textMatrix) = dim(moduleTraitCor[[set]])
 sizeGrWindow(10,7)
-pdf(file = "ModuleTraitRelationships-consensus1.pdf", wi = 10, he = 7);
+pdf(file = "Results/ModuleTraitRelationships-consensus1.pdf", wi = 10, he = 7);
 par(mar = c(6, 8.8, 3, 2.2));
 labeledHeatmap(Matrix = consensusCor,
                xLabels = names(Traits[[1]]$data),
@@ -522,25 +520,16 @@ labeledHeatmap(Matrix = consensusCor,
 dev.off();                           
 
 
+
 #=====================================================================================
 #
-#  Code chunk 6
+#  Setting up result matrices
 #
 #=====================================================================================
 
-
-file = gzfile(description = "GeneAnnotation.csv.gz");
-annot = read.csv(file = file);
-# Match probes in the data set to the probe IDs in the annotation file 
+# Retrieving the gene names
 probes = names(multiExpr[[1]]$data)
 probes2annot = match(probes, annot$substanceBXH)
-
-
-#=====================================================================================
-#
-#  Code chunk 7
-#
-#=====================================================================================
 
 
 consMEs.unord = multiSetMEs(multiExpr, universalColors = moduleLabels, excludeGrey = TRUE)
@@ -553,24 +542,12 @@ for (set in 1:nSets)
 }
 
 
-#=====================================================================================
-#
-#  Code chunk 8
-#
-#=====================================================================================
-
 
 GS.metaZ = (GS[[1]]$Z + GS[[2]]$Z + GS[[3]]$Z)/sqrt(2);
 kME.metaZ = (kME[[1]]$Z + kME[[2]]$Z + GS[[3]]$Z)/sqrt(2);
 GS.metaP = 2*pnorm(abs(GS.metaZ), lower.tail = FALSE);
 kME.metaP = 2*pnorm(abs(kME.metaZ), lower.tail = FALSE);
 
-
-#=====================================================================================
-#
-#  Code chunk 9
-#
-#=====================================================================================
 
 
 GSmat = rbind(GS[[1]]$cor, GS[[2]]$cor, GS[[3]]$cor, GS[[1]]$p, GS[[2]]$p, GS[[3]]$p, GS.metaZ, GS.metaP);
@@ -594,16 +571,16 @@ colnames(kMEmat) = spaste(
 
 #=====================================================================================
 #
-#  Code chunk 10
+#  Creating and saving final result table
 #
 #=====================================================================================
 
 
-info = data.frame(enseblID = rownames(data), ModuleLabel = moduleLabels,
+info = data.frame(ensemblID = rownames(data), ModuleLabel = moduleLabels,
                   ModuleColor = labels2colors(moduleLabels),
                   GSmat,
                   kMEmat);
-write.table(info, file = "consensusAnalysis-CombinedNetworkResults.txt", sep = "\t",
+write.table(info, file = "Results/consensusAnalysis-CombinedNetworkResults.txt", sep = "\t",
           row.names = FALSE, quote = FALSE)
 ##############
 #Testing to see which module contains the most DEGs
@@ -636,22 +613,5 @@ for (n in c(1:length(modulesOfInterests))){
 }
 
 ################
-#Cytoscape 
+#Cytoscape does not seem to work as in the tutorial, cannot find a way to create edges.
 ################
-modules = c("red");
-# Select module probes
-probes = rownames(data)
-inModule = is.finite(match(moduleColors, modules));
-modProbes = probes[inModule];
-# Select the corresponding Topological Overlap
-modTOM = TOM[inModule, inModule];
-dimnames(modTOM) = list(modProbes, modProbes)
-# Export the network into edge and node list files Cytoscape can read
-cyt = exportNetworkToCytoscape(modTOM,
-                               edgeFile = paste("CytoscapeInput-edges-", paste(modules, collapse="-"), ".txt", sep=""),
-                               nodeFile = paste("CytoscapeInput-nodes-", paste(modules, collapse="-"), ".txt", sep=""),
-                               weighted = TRUE,
-                               threshold = 0.1,
-                               nodeNames = modProbes,
-                               nodeAttr = moduleColors[inModule])
-
