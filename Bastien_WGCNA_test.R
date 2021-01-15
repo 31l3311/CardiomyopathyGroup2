@@ -9,10 +9,6 @@ options(stringsAsFactors = F)
 
 # Install required packages
 
-#if (!requireNamespace("BiocManager", quietly = TRUE))
-#  install.packages("BiocManager")
-#uncomment if not yet installed!
-#BiocManager::install(c("WGCNA","rstudioapi","dplyr"))
 
 library(WGCNA)
 library(rstudioapi)
@@ -36,9 +32,16 @@ gsg$allOK
 # normalized counts from RNA-seq data should be log-transformed
 data.log <- log2(data+1)
 data.log <- as.data.frame(t(as.matrix(data.log)))
+#cheching for outliers
+sampleTree = hclust(dist(data.log), method = "average");
+# Plot the sample tree: Open a graphic output window of size 12 by 9 inches
+# The user should change the dimensions if the window is too large or too small.
+sizeGrWindow(12,9)
 
-
-
+par(cex = 0.6);
+par(mar = c(0,4,2,0))
+plot(sampleTree, main = "Sample clustering to detect outliers", sub="", xlab="", cex.lab = 1.5,cex.axis = 1.5, cex.main = 2)
+#Based on this we chose not to remove any outlier
 
 traitData = read.table("MAGNET_SampleData_19112020.txt", header=TRUE, row.names = 1);
 
