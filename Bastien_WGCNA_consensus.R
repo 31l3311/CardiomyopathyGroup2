@@ -20,7 +20,7 @@ library(dplyr)
 # The following setting is important, do not omit.
 options(stringsAsFactors = FALSE);
 #Enable multi-threading if the tool used for R supports it.
-enableWGCNAThreads()
+#enableWGCNAThreads()
 #=====================================================================================
 #
 #  Opening data files
@@ -30,7 +30,7 @@ enableWGCNAThreads()
 
 
 #Read the entire data set
-data <- read.delim("D:/Documents/Github/Research_project_1/MAGNET_GeneExpressionData_CPM_19112020.txt", row.names = 1)
+data <- read.delim("D:/Documents/Github/Research_project_1/ABgxData.txt", row.names = 1)
 #read the entire metadata
 traitData <- read.delim("D:/Documents/Github/Research_project_1/MAGNET_SampleData_19112020.txt", row.names = 1)
 # Take a quick look at what is in the data sets (caution, longish output):
@@ -292,7 +292,7 @@ dev.off();
 
 
 bnet = blockwiseConsensusModules(
-  multiExpr, maxBlockSize = 8000, power = 4, minModuleSize = 60,
+  multiExpr, maxBlockSize = 8000, power = 12, minModuleSize = 30,
   deepSplit = 2, 
   pamRespectsDendro = FALSE, 
   mergeCutHeight = 0.25, numericLabels = TRUE,
@@ -355,32 +355,6 @@ dev.off();
 #                     main = "Single block consensus gene dendrogram and module colors")
 # dev.off();
 #=====================================================================================
-#
-#  Code chunk 1
-#
-# #=====================================================================================
-# 
-# 
-# # Display the current working directory
-# getwd();
-# # If necessary, change the path below to the directory where the data files are stored. 
-# # "." means current directory. On Windows use a forward slash / instead of the usual \.
-# workingDir = ".";
-# setwd(workingDir); 
-# # Load the WGCNA package
-# library(WGCNA)
-# # The following setting is important, do not omit.
-# options(stringsAsFactors = FALSE);
-# # Load the data saved in the first part
-# lnames = load(file = "Consensus-dataInput.RData");
-# #The variable lnames contains the names of loaded variables.
-# lnames
-# # Also load results of network analysis
-# lnames = load(file = "Consensus-NetworkConstruction-auto.RData");
-# lnames
-# exprSize = checkSets(multiExpr);
-# nSets = exprSize$nSets;
-
 
 #=====================================================================================
 #
@@ -452,7 +426,7 @@ labeledHeatmap(Matrix = moduleTraitCor[[set]],
                main = paste("Module--trait relationships in", setLabels[set]))
 dev.off();
 
-# Plot the module-trait relationship table for set number 2
+# Plot the module-trait relationship table for set number 3
 set = 3
 textMatrix =  paste(signif(moduleTraitCor[[set]], 2), "\n(",
                     signif(moduleTraitPvalue[[set]], 1), ")", sep = "");
@@ -528,8 +502,8 @@ dev.off();
 #=====================================================================================
 
 # Retrieving the gene names
-probes = names(multiExpr[[1]]$data)
-probes2annot = match(probes, annot$substanceBXH)
+probes = row.names(data)
+
 
 
 consMEs.unord = multiSetMEs(multiExpr, universalColors = moduleLabels, excludeGrey = TRUE)
@@ -544,7 +518,7 @@ for (set in 1:nSets)
 
 
 GS.metaZ = (GS[[1]]$Z + GS[[2]]$Z + GS[[3]]$Z)/sqrt(2);
-kME.metaZ = (kME[[1]]$Z + kME[[2]]$Z + GS[[3]]$Z)/sqrt(2);
+kME.metaZ = (kME[[1]]$Z + kME[[2]]$Z + kME[[3]]$Z)/sqrt(2);
 GS.metaP = 2*pnorm(abs(GS.metaZ), lower.tail = FALSE);
 kME.metaP = 2*pnorm(abs(kME.metaZ), lower.tail = FALSE);
 
@@ -582,14 +556,18 @@ info = data.frame(ensemblID = rownames(data), ModuleLabel = moduleLabels,
                   kMEmat);
 write.table(info, file = "Results/consensusAnalysis-CombinedNetworkResults.txt", sep = "\t",
           row.names = FALSE, quote = FALSE)
+
 ##############
+#
 #Testing to see which module contains the most DEGs
+#
 #########
+
 #Opening complete results table from DE analysis and keeping all DEGs
 degRes <- read.table("results_all.txt", sep = "\t" )
 degRes <- degRes[which(degRes$qvalue_DCM <= 0.05 | degRes$qvalue_HCM <= 0.05 | degRes$qvalue_PPC <= 0.05),]
 #Testing for any DEG in midnightblue, magenta, royalblue, purple, salmon, and turquoise
-modulesOfInterests <- c("royalblue", "purple", "midnightblue","magenta", "salmon", "turquoise")
+modulesOfInterests <- c("black", "green", "tan","blue", "red")
 nDEG <- percDEG <- c()
 for (n in c(1:length(modulesOfInterests))){
   nDEG[n] <- sum(rownames(degRes) %in% rownames(info[which(info$ModuleColor == modulesOfInterests[n]),]))
@@ -604,7 +582,7 @@ for (n in c(1:length(modulesOfInterests))){
 degRes <- read.table("results_all.txt", sep = "\t" )
 degRes <- degRes[which(degRes$qvalue_DCM <= 0.05 & degRes$qvalue_HCM <= 0.05 & degRes$qvalue_PPC <= 0.05),]
 #Testing for any DEG in midnightblue, magenta, royalblue, purple, salmon, and turquoise
-modulesOfInterests <- c("royalblue", "purple", "midnightblue","magenta", "salmon", "turquoise")
+modulesOfInterests <- c("black", "green", "tan","blue", "red")
 nDEG <- percDEG <- c()
 for (n in c(1:length(modulesOfInterests))){
   nDEG[n] <- sum(rownames(degRes) %in% rownames(info[which(info$ModuleColor == modulesOfInterests[n]),]))
