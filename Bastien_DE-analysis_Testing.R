@@ -16,8 +16,8 @@ require("biomaRt")
 outDir <- file.path("D:", "Documents", "Github", "Research_project_1", "Output")
 
 # Importing gene expression data, sample information, and exon length. Make sure the "File_names" correspond to those in the code.
-gxData <- read.delim("MAGNET_GeneExpressionData_CPM_19112020.txt", row.names = 1)
-sampleInfo <- read.delim("MAGNET_SampleData_19112020.txt", row.names = 1, stringsAsFactors = TRUE)
+gxData <- read.delim("D:/Documents/Github/Research_project_1/MAGNET_GeneExpressionData_CPM_19112020.txt", row.names = 1)
+sampleInfo <- read.delim("D:/Documents/Github/Research_project_1/MAGNET_SampleData_19112020.txt", row.names = 1, stringsAsFactors = TRUE)
 geneTotExonLengths <- read.delim("MAGNET_exonLengths.txt", as.is = T, row.names = 1)
 
 # Checking that the rows of sample_Info & geneTotExonLengths correspond to the columns of gxData.
@@ -238,24 +238,22 @@ gxDataClean <- gxData[noiseTestAll,]
 #flagging genes based on CEFIC rules -> no genes flagged so nice data
 matCounts <- as.matrix(gxData)
 diseases <- levels(sampleInfo$Disease)
-bad <- NULL
+threshold <- 1
+qualityTest <- NULL
 for (gene in row.names(gxData)){
-  GroupsPass<-checkSpike<-NULL
+  Check3<-c()
   for (s in diseases){
     Samples <- colnames(gxData[,which(sampleInfo[,3] == s)])
-    Check <- sum(gxData[gene,Samples] >= 1) >= 0.75*length(Samples) 
-    if (Check == FALSE){checkSpike <- c(checkSpike, TRUE)}
-    else {
-      one <- max(matCounts[gene,Samples]) - median(matCounts[gene,Samples])
-      two <- sum(matCounts[gene,Samples])/(ncol(matCounts[gene,Samples])-1)
-      test <- one > two
-      if (isTRUE(test)) {checkSpike <- c(checkSpike, TRUE)}
-      else{checkSpike <- c(checkSpike, FALSE)}
-    }
+    matCounts2 <- matCounts[gene,Samples]
+    Check1 <- sum(matCounts2 >= threshold) >= 0.75*length(Samples) 
+    one <- max(matCounts2) - median(matCounts2)
+    two <- sum(matCounts2)/(length(Samples)-1)
+    Check2 <- one < two
+    Check3 <- c(Check3, Check1 & Check2)
   }
-  if (sum(checkSpike) >= 1){bad <- c(bad, "flagged")}
-  else {bad <- c(bad,"OK")}
+  qualityTest <- c(qualityTest, sum(Check3)>=1)
 }
+
 #barplot
 gene_to_plot <- "ENSG00000000003"
 gene_count <- as.matrix(subset(gxData, rownames(gxData) == gene_to_plot))
