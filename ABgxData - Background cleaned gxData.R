@@ -33,10 +33,10 @@ options(stringsAsFactors = FALSE)
 
 #1a - Importing data
 
-setwd("D:/Documents/Github/Research_project_1/CardiomyopathyGroup2") # setting working directory
-gxData <- read.delim("D:/Documents/Github/Research_project_1/MAGNET_GeneExpressionData_CPM_19112020.txt", row.names = 1, header = TRUE) # importing gene expression data
-sampleInfo <- read.delim("D:/Documents/Github/Research_project_1/MAGNET_SampleData_19112020.txt", row.names = 1, header = TRUE) # importing phenotype data
-geneTotExonLengths <- read.delim("D:/Documents/Github/Research_project_1/MAGNET_exonLengths.txt", as.is = T, row.names = 1) # importing gene length data
+setwd("C:/Users/kaila/Documents/MSc/Period 2/Experimental methods and data management/R skill sessions/Data") # setting working directory
+gxData <- read.delim("MAGNET_GeneExpressionData_CPM_19112020.txt", row.names = 1, header = TRUE) # importing gene expression data
+sampleInfo <- read.delim("MAGNET_SampleData_19112020.txt", row.names = 1, header = TRUE) # importing phenotype data
+geneTotExonLengths <- read.delim("MAGNET_exonLengths.txt", as.is = T, row.names = 1) # importing gene length data
 
 # Transforming gxData to FPKM from CPM
 
@@ -95,7 +95,7 @@ background <- mean(rowMeans(yGene))
 rmeans <- as.matrix(rowMeans(gxData_fpkm)) # Calculating average expression across all individuals for all genes.
 colnames(rmeans)<-c('Row Means')
 
-# Subsetting genes that are expressed above background level 
+# Subsetting differentially expressed genes that are expressed above background level 
 
 aboveBackground<- NULL # Creating empty variable
 belowBackground<- NULL
@@ -112,11 +112,8 @@ colnames(belowBackground)<-c("Gene ID")
 
 #Cleaned, above background data-  to be used for further analysis. 
 ABgxData = gxData[aboveBackground,]
-
+ABsampleInfo = sampleInfo[aboveBackground,]
 ABgeneTotExonLengths = geneTotExonLengths[aboveBackground,]
-
-write.table(ABgxData, file = "D:/Documents/Github/Research_project_1/ABgxData.txt", sep = "\t", row.names = TRUE, quote = FALSE)
-write.table(ABgeneTotExonLengths, file = "D:/Documents/Github/Research_project_1/ABgeneTotExonLengths.txt", sep = "\t", row.names = TRUE, quote = FALSE)
 
 #---------------------------------------------------------------------------------
 # 3 - Differential gene expression analysis

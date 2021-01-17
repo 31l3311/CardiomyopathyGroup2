@@ -50,15 +50,37 @@ nSets = 3;
 # For easier labeling of plots, create a vector holding descriptive names of the two sets.
 setLabels = c("DCM_Donor", "HCM_Donor", "PPCM_Donor")
 shortLabels = c("DCM", "HCM", "PPCM")
-# Form multi-set expression data: columns starting from 9 contain actual expression data.
+
+#Divide the Donor group
+nfemales <- sum(traitData$Sex == "Female"| traitData$Disease == "Donor")
+donors <- traitData[traitData$Disease == "Donor",]
+donorPPCM <- donors[donors$Sex == "Female",]
+donorPPCM <- donorPPCM[sample(1:nrow(donorPPCM), 6),]
+traitDataIntermediate <- donors[!(row.names(donors) %in% row.names(donorPPCM)),]
+donorDCM <- traitDataIntermediate[sample(1:nrow(traitDataIntermediate), 133),]
+donorHCM <- traitDataIntermediate[!(row.names(traitDataIntermediate) %in% row.names(donorDCM)),]
+donorDCMIndex <- colnames(data) %in% row.names(donorDCM) 
+donorHCMIndex <- colnames(data) %in% row.names(donorHCM) 
+donorPPCMIndex <- colnames(data) %in% row.names(donorPPCM) 
+# Form multi-set expression data: columns starting from 9 contain actual expression data
+# multiExpr = vector(mode = "list", length = nSets)
+# 
+# multiExpr[[1]] = list(data = as.data.frame(t(data[,traitData$Disease == "Donor"|traitData$Disease == "DCM"])));
+# rownames(multiExpr[[1]]$data) = colnames(data[,traitData$Disease == "Donor"|traitData$Disease == "DCM"]);
+# multiExpr[[2]] = list(data = as.data.frame(t(data[,traitData$Disease == "Donor"|traitData$Disease == "HCM"])));
+# rownames(multiExpr[[2]]$data) = colnames(data[,traitData$Disease == "Donor"|traitData$Disease == "HCM"]);
+# multiExpr[[3]] = list(data = as.data.frame(t(data[,traitData$Disease == "Donor"|traitData$Disease == "PPCM"])));
+# rownames(multiExpr[[3]]$data) = colnames(data[,traitData$Disease == "Donor"|traitData$Disease == "PPCM"]);
+# 
+# exprSize = checkSets(multiExpr)
 multiExpr = vector(mode = "list", length = nSets)
 
-multiExpr[[1]] = list(data = as.data.frame(t(data[,traitData$Disease == "Donor"|traitData$Disease == "DCM"])));
-rownames(multiExpr[[1]]$data) = colnames(data[,traitData$Disease == "Donor"|traitData$Disease == "DCM"]);
-multiExpr[[2]] = list(data = as.data.frame(t(data[,traitData$Disease == "Donor"|traitData$Disease == "HCM"])));
-rownames(multiExpr[[2]]$data) = colnames(data[,traitData$Disease == "Donor"|traitData$Disease == "HCM"]);
-multiExpr[[3]] = list(data = as.data.frame(t(data[,traitData$Disease == "Donor"|traitData$Disease == "PPCM"])));
-rownames(multiExpr[[3]]$data) = colnames(data[,traitData$Disease == "Donor"|traitData$Disease == "PPCM"]);
+multiExpr[[1]] = list(data = as.data.frame(t(data[,donorDCMIndex|traitData$Disease == "DCM"])));
+rownames(multiExpr[[1]]$data) = colnames(data[,donorDCMIndex|traitData$Disease == "DCM"]);
+multiExpr[[2]] = list(data = as.data.frame(t(data[,donorHCMIndex|traitData$Disease == "HCM"])));
+rownames(multiExpr[[2]]$data) = colnames(data[,donorHCMIndex|traitData$Disease == "HCM"]);
+multiExpr[[3]] = list(data = as.data.frame(t(data[,donorPPCMIndex|traitData$Disease == "PPCM"])));
+rownames(multiExpr[[3]]$data) = colnames(data[donorPPCMIndex|traitData$Disease == "PPCM"]);
 
 exprSize = checkSets(multiExpr)
 
@@ -171,8 +193,7 @@ datTraits<- traitData
 
 datTraits <- traitData
 datTraits$Age <- as.numeric(datTraits$Age)
-datTraits[datTraits=="Male"]<-0
-datTraits[datTraits=="Female"]<-1
+datTraits <- datTraits[,-2]
 datTraits[datTraits=="Donor"]<-0
 datTraits[datTraits=="DCM"]<-1
 datTraits[datTraits=="HCM"]<-2
@@ -292,7 +313,7 @@ dev.off();
 
 
 bnet = blockwiseConsensusModules(
-  multiExpr, maxBlockSize = 8000, power = 12, minModuleSize = 30,
+  multiExpr, maxBlockSize = 8000, power = 9, minModuleSize = 30,
   deepSplit = 2, 
   pamRespectsDendro = FALSE, 
   mergeCutHeight = 0.25, numericLabels = TRUE,
@@ -562,12 +583,12 @@ write.table(info, file = "Results/consensusAnalysis-CombinedNetworkResults.txt",
 #Testing to see which module contains the most DEGs
 #
 #########
-
+modulesOfInterests <- c("darkred", "red", "black","purple")
 #Opening complete results table from DE analysis and keeping all DEGs
 degRes <- read.table("results_all.txt", sep = "\t" )
 degRes <- degRes[which(degRes$qvalue_DCM <= 0.05 | degRes$qvalue_HCM <= 0.05 | degRes$qvalue_PPC <= 0.05),]
 #Testing for any DEG in midnightblue, magenta, royalblue, purple, salmon, and turquoise
-modulesOfInterests <- c("black", "green", "tan","blue", "red")
+
 nDEG <- percDEG <- c()
 for (n in c(1:length(modulesOfInterests))){
   nDEG[n] <- sum(rownames(degRes) %in% rownames(info[which(info$ModuleColor == modulesOfInterests[n]),]))
@@ -582,7 +603,7 @@ for (n in c(1:length(modulesOfInterests))){
 degRes <- read.table("results_all.txt", sep = "\t" )
 degRes <- degRes[which(degRes$qvalue_DCM <= 0.05 & degRes$qvalue_HCM <= 0.05 & degRes$qvalue_PPC <= 0.05),]
 #Testing for any DEG in midnightblue, magenta, royalblue, purple, salmon, and turquoise
-modulesOfInterests <- c("black", "green", "tan","blue", "red")
+
 nDEG <- percDEG <- c()
 for (n in c(1:length(modulesOfInterests))){
   nDEG[n] <- sum(rownames(degRes) %in% rownames(info[which(info$ModuleColor == modulesOfInterests[n]),]))
