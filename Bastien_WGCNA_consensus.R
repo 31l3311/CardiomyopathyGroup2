@@ -51,17 +51,20 @@ nSets = 3;
 setLabels = c("DCM_Donor", "HCM_Donor", "PPCM_Donor")
 shortLabels = c("DCM", "HCM", "PPCM")
 
-#Divide the Donor group
+#Divide the Donor group. 
+#!!!!Due to randomization this part should not be run anymore if possible. Last ran 18th of January 2021 at 16:37.
 nfemales <- sum(traitData$Sex == "Female"| traitData$Disease == "Donor")
 donors <- traitData[traitData$Disease == "Donor",]
 donorPPCM <- donors[donors$Sex == "Female",]
-donorPPCM <- donorPPCM[sample(1:nrow(donorPPCM), 6),]
+donorPPCM <- donorPPCM[sample(1:nrow(donorPPCM), 8),]
 traitDataIntermediate <- donors[!(row.names(donors) %in% row.names(donorPPCM)),]
-donorDCM <- traitDataIntermediate[sample(1:nrow(traitDataIntermediate), 133),]
+donorDCM <- traitDataIntermediate[sample(1:nrow(traitDataIntermediate), 115),]
 donorHCM <- traitDataIntermediate[!(row.names(traitDataIntermediate) %in% row.names(donorDCM)),]
 donorDCMIndex <- colnames(data) %in% row.names(donorDCM) 
 donorHCMIndex <- colnames(data) %in% row.names(donorHCM) 
 donorPPCMIndex <- colnames(data) %in% row.names(donorPPCM) 
+
+save(donorDCMIndex,donorHCMIndex,donorPPCMIndex, file = "Intermediate_data/Donors_Index.RData")
 # Form multi-set expression data: columns starting from 9 contain actual expression data
 # multiExpr = vector(mode = "list", length = nSets)
 # 
@@ -73,6 +76,8 @@ donorPPCMIndex <- colnames(data) %in% row.names(donorPPCM)
 # rownames(multiExpr[[3]]$data) = colnames(data[,traitData$Disease == "Donor"|traitData$Disease == "PPCM"]);
 # 
 # exprSize = checkSets(multiExpr)
+
+indexes <- load(file = "Intermediate_data/Donors_Index.RData")
 multiExpr = vector(mode = "list", length = nSets)
 
 multiExpr[[1]] = list(data = as.data.frame(t(data[,donorDCMIndex|traitData$Disease == "DCM"])));
@@ -196,8 +201,8 @@ datTraits$Age <- as.numeric(datTraits$Age)
 datTraits <- datTraits[,-2]
 datTraits[datTraits=="Donor"]<-0
 datTraits[datTraits=="DCM"]<-1
-datTraits[datTraits=="HCM"]<-2
-datTraits[datTraits=="PPCM"]<-3
+datTraits[datTraits=="HCM"]<-1
+datTraits[datTraits=="PPCM"]<-1
 datTraits[datTraits=="Caucasian"]<-0
 datTraits[datTraits=="African.American"]<-1
 allTraits <- mutate_all(datTraits, function(x) as.numeric(as.character(x)))
@@ -259,7 +264,7 @@ for (set in 1:nSets)
                                                      verbose = 2)[[2]]);
 collectGarbage();
 # Plot the results:
-colors = c("black", "red")
+colors = c("black", "red", "blue")
 # Will plot these columns of the returned scale free analysis tables
 plotCols = c(2,5,6,7)
 colNames = c("Scale Free Topology Model Fit", "Mean connectivity", "Median connectivity",
@@ -276,7 +281,7 @@ for (set in 1:nSets)
 }
 # Plot the quantities in the chosen columns vs. the soft thresholding power
 sizeGrWindow(8, 6)
-pdf(file = "Results/scaleFreeAnalysis.pdf", wi = 8, he = 6);
+pdf(file = "Results/scaleFreeAnalysisFinal.pdf", wi = 8, he = 6);
 par(mfcol = c(2,2));
 par(mar = c(4.2, 4.2 , 2.2, 0.5))
 cex1 = 0.7;
@@ -480,12 +485,12 @@ consensusCor = matrix(NA, nrow(moduleTraitCor[[1]]), ncol(moduleTraitCor[[1]]));
 consensusPvalue = matrix(NA, nrow(moduleTraitCor[[1]]), ncol(moduleTraitCor[[1]]));
 # Find consensus negative correlations
 negative = moduleTraitCor[[1]] < 0 & moduleTraitCor[[2]] < 0 & moduleTraitCor[[3]] < 0;
-consensusCor[negative] = pmax(moduleTraitCor[[1]][negative], moduleTraitCor[[2]][negative]);
+consensusCor[negative] = pmax(moduleTraitCor[[1]][negative], moduleTraitCor[[2]][negative], moduleTraitCor[[3]][negative]);
 consensusPvalue[negative] = pmax(moduleTraitPvalue[[1]][negative], moduleTraitPvalue[[2]][negative], moduleTraitPvalue[[3]][negative]);
 # Find consensus positive correlations
 positive = moduleTraitCor[[1]] > 0 & moduleTraitCor[[2]] > 0 & moduleTraitCor[[3]] > 0;
 consensusCor[positive] = pmin(moduleTraitCor[[1]][positive], moduleTraitCor[[2]][positive], moduleTraitCor[[3]][positive]);
-consensusPvalue[positive] = pmax(moduleTraitPvalue[[1]][positive], moduleTraitPvalue[[2]][positive]);
+consensusPvalue[positive] = pmax(moduleTraitPvalue[[1]][positive], moduleTraitPvalue[[2]][positive], moduleTraitPvalue[[3]][positive]);
 
 
 #=====================================================================================
@@ -611,6 +616,4 @@ for (n in c(1:length(modulesOfInterests))){
   print(paste0("Number of DEGs in ", modulesOfInterests[n] ," module (percentage) ",nDEG[n],"(",percDEG[n],")"))
 }
 
-################
-#Cytoscape does not seem to work as in the tutorial, cannot find a way to create edges.
-################
+save(list = ls(), file = "Results/environment_all.Rdata")
