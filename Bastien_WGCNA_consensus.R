@@ -28,7 +28,6 @@ options(stringsAsFactors = FALSE);
 #=====================================================================================
 
 
-
 #Read the entire data set
 data <- read.delim("D:/Documents/Github/Research_project_1/ABgxData.txt", row.names = 1)
 #read the entire metadata
@@ -424,7 +423,7 @@ labeledHeatmap(Matrix = moduleTraitCor[[set]],
                yLabels = MEColorNames,
                ySymbols = MEColorNames,
                colorLabels = FALSE,
-               colors = greenWhiteRed(50),
+               colors = blueWhiteRed(50),
                textMatrix = textMatrix,
                setStdMargins = FALSE,
                cex.text = 0.5,
@@ -583,37 +582,66 @@ info = data.frame(ensemblID = rownames(data), ModuleLabel = moduleLabels,
 write.table(info, file = "Results/consensusAnalysis-CombinedNetworkResults.txt", sep = "\t",
           row.names = FALSE, quote = FALSE)
 
+#=====================================================================================
+#
+#  Re-opening final result table
+#
+#=====================================================================================
+
+info <- read.table(file = "Results/consensusAnalysis-CombinedNetworkResults.txt", sep = "\t", header = TRUE, row.names = 1)
+
 ##############
 #
 #Testing to see which module contains the most DEGs
 #
 #########
-modulesOfInterests <- c("darkred", "red", "black","purple")
+
+modulesOfInterests <- c("royalblue", "tan", "red","darkred","grey60","lightyellow")
 #Opening complete results table from DE analysis and keeping all DEGs
-degRes <- read.table("results_all.txt", sep = "\t" )
-degRes <- degRes[which(degRes$qvalue_DCM <= 0.05 | degRes$qvalue_HCM <= 0.05 | degRes$qvalue_PPC <= 0.05),]
+
+
+#Get DEgenes
+
+DEGs <- read.table("Intermediate_data/allDEgenes.txt", sep = "\t", header = TRUE )
+DEGsAny <- 
+# degRes <- read.table("results_all.txt", sep = "\t" )
+# degRes <- degRes[which(degRes$qvalue_DCM <= 0.05 | degRes$qvalue_HCM <= 0.05 | degRes$qvalue_PPC <= 0.05),]
 #Testing for any DEG in midnightblue, magenta, royalblue, purple, salmon, and turquoise
 
-nDEG <- percDEG <- c()
+# nDEG <- percDEG <- c()
+# for (n in c(1:length(modulesOfInterests))){
+#   nDEG[n] <- sum(rownames(degRes) %in% rownames(info[which(info$ModuleColor == modulesOfInterests[n]),]))
+#   percDEG[n] <- round(nDEG[n] / nrow(info[which(info$ModuleColor == modulesOfInterests[n]),]) * 100, digits = 1)
+#   print(paste0("Number of DEGs in ", modulesOfInterests[n] ," module (percentage) ",nDEG[n],"(",percDEG[n],")"))
+# }
+# #####
+# #Doing the same thing here but with genes that are DEGs for all diseases
+# ####
+# 
+# #Opening complete results table from DE analysis and keeping overlap DEGs
+# degRes <- read.table("results_all.txt", sep = "\t" )
+# degRes <- degRes[which(degRes$qvalue_DCM <= 0.05 & degRes$qvalue_HCM <= 0.05 & degRes$qvalue_PPC <= 0.05),]
+# #Testing for any DEG in midnightblue, magenta, royalblue, purple, salmon, and turquoise
+# 
+# nDEG <- percDEG <- c()
+# for (n in c(1:length(modulesOfInterests))){
+#   nDEG[n] <- sum(rownames(degRes) %in% rownames(info[which(info$ModuleColor == modulesOfInterests[n]),]))
+#   percDEG[n] <- round(nDEG[n] / nrow(info[which(info$ModuleColor == modulesOfInterests[n]),]) * 100, digits = 1)
+#   print(paste0("Number of DEGs in ", modulesOfInterests[n] ," module (percentage) ",nDEG[n],"(",percDEG[n],")"))
+# }
+
+nDegAny <- percDegAny <- moduleGenes <- nDegAll <- percDegAll <- c()
 for (n in c(1:length(modulesOfInterests))){
-  nDEG[n] <- sum(rownames(degRes) %in% rownames(info[which(info$ModuleColor == modulesOfInterests[n]),]))
-  percDEG[n] <- round(nDEG[n] / nrow(info[which(info$ModuleColor == modulesOfInterests[n]),]) * 100, digits = 1)
-  print(paste0("Number of DEGs in ", modulesOfInterests[n] ," module (percentage) ",nDEG[n],"(",percDEG[n],")"))
+  moduleGenes <- rownames(info[which(info$ModuleColor == modulesOfInterests[n]),])
+  nDegAny[n] <- sum(moduleGenes %in% DEGs$DEgenes_DCM  | moduleGenes %in% DEGs$DEgenes_HCM | moduleGenes %in% DEGs$DEgenes_PPCM )
+  percDegAny[n] <- round(nDegAny[n] / nrow(info[which(info$ModuleColor == modulesOfInterests[n]),]) * 100, digits = 1)
+  print(paste0("Number of any DEGs in ", modulesOfInterests[n] ," module (%) ",nDegAny[n]," (",percDegAny[n],")"))
 }
-#####
-#Doing the same thing here but with genes that are DEGs for all diseases
-####
-
-#Opening complete results table from DE analysis and keeping overlap DEGs
-degRes <- read.table("results_all.txt", sep = "\t" )
-degRes <- degRes[which(degRes$qvalue_DCM <= 0.05 & degRes$qvalue_HCM <= 0.05 & degRes$qvalue_PPC <= 0.05),]
-#Testing for any DEG in midnightblue, magenta, royalblue, purple, salmon, and turquoise
-
-nDEG <- percDEG <- c()
-for (n in c(1:length(modulesOfInterests))){
-  nDEG[n] <- sum(rownames(degRes) %in% rownames(info[which(info$ModuleColor == modulesOfInterests[n]),]))
-  percDEG[n] <- round(nDEG[n] / nrow(info[which(info$ModuleColor == modulesOfInterests[n]),]) * 100, digits = 1)
-  print(paste0("Number of DEGs in ", modulesOfInterests[n] ," module (percentage) ",nDEG[n],"(",percDEG[n],")"))
+for(n in c(1:length(modulesOfInterests))){
+  moduleGenes <- rownames(info[which(info$ModuleColor == modulesOfInterests[n]),])
+  nDegAll[n] <- sum(moduleGenes %in% DEGs$DEgenes_DCM & moduleGenes %in% DEGs$DEgenes_HCM & moduleGenes %in% DEGs$DEgenes_PPCM )
+  percDegAll[n] <- round(nDegAll[n] / nrow(info[which(info$ModuleColor == modulesOfInterests[n]),]) * 100, digits = 1)
+  print(paste0("Number of any DEGs in ", modulesOfInterests[n] ," module (%) ",nDegAll[n]," (",percDegAll[n],")"))
 }
 
 save(list = ls(), file = "Results/environment_all.Rdata")
