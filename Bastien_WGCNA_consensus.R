@@ -17,6 +17,7 @@ setwd("D:/Documents/Github/Research_project_1/CardiomyopathyGroup2")
 # Load the package
 library(WGCNA);
 library(dplyr)
+library(ggplot2)
 # The following setting is important, do not omit.
 options(stringsAsFactors = FALSE);
 #Enable multi-threading if the tool used for R supports it.
@@ -428,7 +429,7 @@ labeledHeatmap(Matrix = moduleTraitCor[[set]],
                setStdMargins = FALSE,
                cex.text = 0.5,
                zlim = c(-1,1),
-               main = paste("Module--trait relationships in", setLabels[set]))
+               main = paste("Module-trait relationships in", setLabels[set]))
 dev.off();
 # Plot the module-trait relationship table for set number 2
 set = 2
@@ -448,7 +449,7 @@ labeledHeatmap(Matrix = moduleTraitCor[[set]],
                setStdMargins = FALSE,
                cex.text = 0.5,
                zlim = c(-1,1),
-               main = paste("Module--trait relationships in", setLabels[set]))
+               main = paste("Module-trait relationships in", setLabels[set]))
 dev.off();
 
 # Plot the module-trait relationship table for set number 3
@@ -469,7 +470,7 @@ labeledHeatmap(Matrix = moduleTraitCor[[set]],
                setStdMargins = FALSE,
                cex.text = 0.5,
                zlim = c(-1,1),
-               main = paste("Module--trait relationships in", setLabels[set]))
+               main = paste("Module-trait relationships in", setLabels[set]))
 dev.off();
 
 #=====================================================================================
@@ -515,7 +516,7 @@ labeledHeatmap(Matrix = consensusCor,
                setStdMargins = FALSE,
                cex.text = 0.5,
                zlim = c(-1,1),
-               main = paste0("Consensus module--trait relationships across"))
+               main = paste0("Consensus module-trait relationships across diseases"))
 dev.off();                           
 
 
@@ -645,3 +646,27 @@ for(n in c(1:length(modulesOfInterests))){
 }
 
 save(list = ls(), file = "Results/environment_all.Rdata")
+
+#Vizualizing module eigenGenes
+
+disease <- vector(mode = "list", length = nSets)
+for (set in 1:nSets){
+  disease[[set]] = list(data = as.data.frame(Traits[[set]]$data$Disease));names(disease[[set]]$data) = "Disease"}
+consMEsC = multiSetMEs(multiExpr, universalColors = moduleColors);
+MET = consensusOrderMEs(addTraitToMEs(consMEsC, disease));
+sizeGrWindow(8,10);
+pdf(file = "Results/EigengeneNetworks.pdf", width= 8, height = 10);
+par(cex = 0.9)
+plotEigengeneNetworks(MET, setLabels, marDendro = c(0,2,2,1), marHeatmap = c(3,3,2,1),zlimPreservation = c(0.5, 1), xLabelsAngle = 90)
+dev.off()
+
+#Vizualizing mrelationship between module and GS
+MEIndex <- unique(info[,c(2,3)])
+for (n in 1:length(modulesOfInterests)){
+  column <- paste0("kME.set1.ME", MEIndex[which(test$ModuleColor == modulesOfInterests[n]),1])
+  plot <- ggplot(info[which(info$ModuleColor == modulesOfInterests[n]),], aes_string(x = column, y = "GS.set1.Disease", color = "p.GS.metaDisease")) +
+    geom_point() +
+    ylab("Gene signifficance for Disease") +
+    xlab(paste0("Module membership for ", modulesOfInterests[n]))
+  print(plot)
+}
