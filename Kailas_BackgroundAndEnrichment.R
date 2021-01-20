@@ -13,6 +13,8 @@ require("topGO")
 
 options(stringsAsFactors = FALSE)
 
+WGCNAresults <- read.delim("consensusAnalysis-CombinedNetworkResults.txt", row.names = 1, header=TRUE)
+
 #-----------------------------------------------------------------------------#
 # 1: Importing the data and inspecting sample information
 #-----------------------------------------------------------------------------
@@ -230,6 +232,20 @@ names(DEgenes) <- c("DEgenes_DCM", "DEgenes_HCM", "DEgenes_PPCM", "DEgenes_IntDC
 # Create a data frame with DEGs, one column per disease
 DEgenes<-listToDF(DEgenes)
 
+DCM<-(row.names(ABgxData) %in% row.names(resDCM))
+names(DCM) <- ABgxData
+HCM<-(row.names(ABgxData) %in% row.names(resHCM))
+names(HCM) <- ABgxData
+PPCM<-(row.names(ABgxData) %in% row.names(resPPCM))
+names(PPCM) <- ABgxData
+DEgenesLogical <- data.frame(DCM,HCM,PPCM)
+row.names(DEgenesLogical)<- row.names(ABgxData)
+
+# checking if the list made above contains all DE genes
+#all((row.names(resDCM) %in% row.names(DEgenesLogical)[DEgenesLogical$DCM==TRUE]) &
+#     row.names(DEgenesLogical)[DEgenesLogical$DCM==TRUE] %in% row.names(resDCM)) 
+
+write.table(DEgenesLogical, file="DEgenesLogical.txt", sep="\t", quote=FALSE)
 write.table(DEgenes, file="allDEgenes.txt", sep='\t', row.names = FALSE)
 
 #-------------------------------------------------------------------------------
@@ -648,3 +664,47 @@ goID <- allRes[1, "GO.ID"]
 
 # Plots density curve to show distribution of gene scores of genes within a GO term. 
 #print(showGroupDensity(GOdata, goID, ranks = TRUE))
+
+#-------------------------------------------------------------------------------
+# topGO on modules identified by WGCNA 
+#-------------------------------------------------------------------------------
+moduleColors<- unique(WGCNAresults[,2])
+for (module in moduleColors){
+  InterestingGenes <- row.names(WGCNAresults[WGCNAresults[,2]==module,]) # Vector of interesting Ensembl IDs (such as DE genes)
+  for (ont in c("BP", "CC", "MF")) {
+    outputVar <- paste("allRes",module,ont,sep="_") #setting output variable name
+    file <- paste("TopGO_Results_",module,".xlsx", sep="") #setting file name
+    print(ont)
+    dataForTopGO <- annFUN.org(ont, mapping = "org.Hs.eg.db", ID = "ensembl")
+    universeGenes <- unique(unlist(dataForTopGO))
+    factorGenesTopGO <- factor(as.integer(universeGenes %in% InterestingGenes))
+    names(factorGenesTopGO) <- universeGenes
+    GOdata <- new("topGOdata",
+                  ontology = ont, allGenes = factorGenesTopGO, nodeSize = 5,
+                  annot = annFUN.org, mapping = "org.Hs.eg.db", ID = "ensembl"
+    )
+    goFisherResult <- runTest(GOdata, algorithm = "parentchild", statistic = "fisher") # recommended setting	= parentchild algorithm
+    #goKSresults <- runTest(GOdata, algorithm = "classic", statistic = "ks")
+    allRes <- GenTable(GOdata,
+                       Pvalue = goFisherResult, # classicFisher = goFisherResult,classicKS = goKSresults,
+                       topNodes = length(goFisherResult@score),
+                       orderBy = "Pvalue", ranksOf = "Pvalue",
+                       numChar = 1E9
+    )
+    if (all(as.numeric(allRes$Pvalue) >= 0.05)) {
+      allRes <- allRes[1, ]
+      allRes[, 1:6] <- NA
+    } else {
+      allRes <- allRes[1:max(which(as.numeric(allRes[, 6]) < 0.05)), ] # leave only results with p < 0.05
+    }
+    
+    write.xlsx(allRes,
+               file = file,
+               sheet = ifelse(ont == "BP", "BiologicalProcess",
+                              ifelse(ont == "CC", "CellularComponent", "MolecularFunction")
+               ),
+               row.names = FALSE,
+               append = TRUE
+    )
+  }
+}
