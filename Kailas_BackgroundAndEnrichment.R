@@ -3,12 +3,14 @@ require("limma")
 require("biomaRt")
 require("xlsx")
 require("ggplot2")
+require("topGO")
 require("enrichplot")
 require("clusterProfiler")
 require("pathfindR")
 require("pathview")
 require("ggraph") - #to install this use install.packages('ggraph')
 require("gt")
+require("stringr")
 library(org.Hs.eg.db)
 library(EnsDb.Hsapiens.v86)
 Ensdb <- EnsDb.Hsapiens.v86
@@ -18,6 +20,129 @@ options(stringsAsFactors = FALSE)
 setwd("C:/Users/kaila/Documents/MSc/Period 2/Experimental methods and data management/R skill sessions/Data") 
 load(file = "usethis2401.RData")
 #save(list = ls(all.names = TRUE), file = "usethis2401.RData", envir = .GlobalEnv)
+
+#-------------------------------------------------------------------------------
+# Defining required functions
+#-------------------------------------------------------------------------------
+# Defining function to convert list to dataframe
+listToDF <- function(list){
+  sapply(list, "length<-", max(lengths(list)))
+}
+
+# Defining function to convert ENSEMBL to ENTREZID
+convertToEntrez <- function (inputlist){
+  return(distinct(bitr(inputlist,"ENSEMBL","ENTREZID",OrgDb = org.Hs.eg.db),ENSEMBL,.keep_all=T))
+}
+
+# Defining function to convert SYMBOL to ENSEMBL 
+convertToEnsembl <- function (inputlist){
+  return(distinct(bitr(inputlist,"SYMBOL","ENSEMBL",OrgDb = org.Hs.eg.db),SYMBOL,.keep_all=T))
+}
+
+
+# Defining function to convert ENSEMBL to SYMBOL for each module
+convertToSymbol <- function(ensemblGeneList){
+  return(distinct(bitr(ensemblGeneList,"ENSEMBL","SYMBOL",OrgDb = org.Hs.eg.db),ENSEMBL,.keep_all=T))
+}
+
+# For pathfindR term-gene graph
+{
+  term_gene_graph1 = function (result_df, num_terms = 10, layout = "stress", 
+                               use_description = FALSE, node_size = "num_genes") 
+  {
+    if (!is.numeric(num_terms) & !is.null(num_terms)) {
+      stop("`num_terms` must either be numeric or NULL!")
+    }
+    if (!is.logical(use_description)) {
+      stop("`use_description` must either be TRUE or FALSE!")
+    }
+    ID_column <- ifelse(use_description, "Term_Description", 
+                        "ID")
+    val_node_size <- c("num_genes", "p_val")
+    if (!node_size %in% val_node_size) {
+      stop("`node_size` should be one of ", paste(dQuote(val_node_size), 
+                                                  collapse = ", "))
+    }
+    if (!is.data.frame(result_df)) 
+      stop("`result_df` should be a data frame")
+    necessary_cols <- c(ID_column, "lowest_p", "Up_regulated", 
+                        "Down_regulated")
+    if (!all(necessary_cols %in% colnames(result_df))) {
+      stop(paste(c("All of", paste(necessary_cols, collapse = ", "), 
+                   "must be present in `results_df`!"), collapse = " "))
+    }
+    if (!is.null(num_terms)) {
+      if (nrow(result_df) < num_terms) {
+        num_terms <- NULL
+      }
+    }
+    result_df <- result_df[order(result_df$lowest_p, decreasing = FALSE), 
+    ]
+    if (!is.null(num_terms)) {
+      result_df <- result_df[1:num_terms, ]
+    }
+    graph_df <- data.frame()
+    for (i in base::seq_len(nrow(result_df))) {
+      up_genes <- unlist(strsplit(result_df$Up_regulated[i], 
+                                  ", "))
+      down_genes <- unlist(strsplit(result_df$Down_regulated[i], 
+                                    ", "))
+      genes <- c(up_genes, down_genes)
+      for (gene in genes) {
+        graph_df <- rbind(graph_df, data.frame(Term = result_df[i, 
+                                                                ID_column], Gene = gene))
+      }
+    }
+    up_genes <- lapply(result_df$Up_regulated, function(x) unlist(strsplit(x, 
+                                                                           ", ")))
+    up_genes <- unlist(up_genes)
+    g <- igraph::graph_from_data_frame(graph_df, directed = FALSE)
+    cond_term <- names(igraph::V(g)) %in% result_df[, ID_column]
+    cond_up_gene <- names(igraph::V(g)) %in% up_genes
+    igraph::V(g)$type <- ifelse(cond_term, "term", ifelse(cond_up_gene, 
+                                                          "up", "down"))
+    if (node_size == "num_genes") {
+      sizes <- igraph::degree(g)
+      sizes <- ifelse(igraph::V(g)$type == "term", sizes, 
+                      2)
+      size_label <- "Number of genes"
+    }
+    else {
+      idx <- match(names(igraph::V(g)), result_df[, ID_column])
+      sizes <- -log10(result_df$lowest_p[idx])
+      sizes[is.na(sizes)] <- 2
+      size_label <- "-log10(p)"
+    }
+    igraph::V(g)$size <- sizes
+    igraph::V(g)$label.cex <- 0.5
+    igraph::V(g)$frame.color <- "gray"
+    igraph::V(g)$color <- ifelse(igraph::V(g)$type == "term", 
+                                 "#F0A062", ifelse(igraph::V(g)$type == "up", 
+                                                   "green", "red"))
+    p <- ggraph::ggraph(g, layout = layout)
+    p <- p + ggraph::geom_edge_link(alpha = 0.4, colour = "darkgrey")
+    p <- p + ggraph::geom_node_point(ggplot2::aes_(color = ~I(color), 
+                                                   size = ~size))
+    p <- p + ggplot2::scale_size(range = c(5, 10), breaks = round(seq(round(min(igraph::V(g)$size)), 
+                                                                      round(max(igraph::V(g)$size)), length.out = 4)), name = size_label)
+    p <- p + ggplot2::theme_void()
+    p <- p + ggraph::geom_node_text(ggplot2::aes_(label = ~name),repel=T, 
+                                    nudge_y = 0)
+    p <- p + ggplot2::scale_colour_manual(values = unique(igraph::V(g)$color), 
+                                          name = NULL, labels = c("Enriched term", "Up-regulated gene", 
+                                                                  "Down-regulated gene"))
+    if (is.null(num_terms)) {
+      p <- p + ggplot2::ggtitle("Term-Gene Graph")
+    }
+    else {
+      p <- p + ggplot2::ggtitle("Term-Gene Graph", subtitle = paste(c("Top", 
+                                                                      num_terms, "terms"), collapse = " "))
+    }
+    p <- p + ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5), 
+                            plot.subtitle = ggplot2::element_text(hjust = 0.5))
+    return(p)
+  }
+}
 
 #-------------------------------------------------------------------------------
 # 1 - Importing the data and inspecting sample information
@@ -240,9 +365,6 @@ resIntHCM <- topTable(fit2,
 #-------------------------------------------------------------------------------
 # 5 - Logical vector to identify differentially expressed genes
 #-------------------------------------------------------------------------------
-listToDF <- function(list){
-  sapply(list, "length<-", max(lengths(list)))
-}
 
 DEgenes <- list(row.names(resDCM), row.names(resHCM), row.names(resPPCM), row.names(resIntDCM), row.names(resIntHCM))
 names(DEgenes) <- c("DEgenes_DCM", "DEgenes_HCM", "DEgenes_PPCM", "DEgenes_IntDCM","DEgenes_IntHCM")
@@ -321,10 +443,16 @@ modulesOfInterest <- c("tan", "darkred")#, "lightyellow","red","grey60","royalbl
 # Diseases of interest
 diseases <- c("DCM", "HCM", "PPCM")
 
-# Defining function to convert ENSEMBL to ENTREZID for each module
+# Defining function to convert ENSEMBL to ENTREZID
 convertToEntrez <- function (inputlist){
   return(distinct(bitr(inputlist,"ENSEMBL","ENTREZID",OrgDb = org.Hs.eg.db),ENSEMBL,.keep_all=T))
 }
+
+# Defining function to convert SYMBOL to ENSEMBL 
+convertToEnsembl <- function (inputlist){
+  return(distinct(bitr(inputlist,"SYMBOL","ENSEMBL",OrgDb = org.Hs.eg.db),SYMBOL,.keep_all=T))
+}
+
 
 # Defining function to convert ENSEMBL to SYMBOL for each module
 convertToSymbol <- function(ensemblGeneList){
@@ -387,21 +515,19 @@ for (module in modulesOfInterest){
   source = get(paste0("genesIn_",module))
   file = paste0("goEnrichmentResults_",module,".xlsx")
   for (ont in ontology){
-    dataForTopGO <- annFUN.org(ont, mapping = "org.Hs.eg.db", ID = "ensembl")
-    universeGenes <- unique(unlist(dataForTopGO))
     outputVar = paste("ego",module,ont,sep="_")
-    assign(outputVar, enrichGO(gene = source, 
+    assign(outputVar, simplify(enrichGO(gene = source, 
                                universe = row.names(gxData),
                                keyType = "ENSEMBL",
                                OrgDb = org.Hs.eg.db,
                                ont = ont,
                                pAdjustMethod = "BH",
-                               pvalueCutoff = 0.5,
-                               qvalueCutoff = 0.5,
+                               pvalueCutoff = 0.05,
+                               qvalueCutoff = 0.05,
                                readable = FALSE,
                                minGSSize = 2,
-                               maxGSSize = 500))
-    resGO <- (get(outputVar))
+                               maxGSSize = 500)))
+    resGO <- get(outputVar)
     write.xlsx(resGO,
                file = file,
                sheet = ifelse(ont == "BP", "BiologicalProcess",
@@ -410,6 +536,15 @@ for (module in modulesOfInterest){
                ),
                row.names = FALSE,
                append = TRUE)
+  }
+}
+
+#removing GO terms belonging to level 4 or lower
+for (module in modulesOfInterest){
+  for (ont in ontology){  
+    source = get(paste("ego",module,ont,sep="_"))
+    outputVar = paste("goAbove3",module,ont,sep="_")
+    assign(outputVar,dropGO(source, level= c(1,2,3)))
   }
 }
 
@@ -425,11 +560,11 @@ for (module in modulesOfInterest){
                                organism = "hsa", 
                                keyType = "ncbi-geneid",
                                pvalueCutoff = 0.5,
+                               qvalueCutoff = 0.5,
                                pAdjustMethod = "BH",
                                universe = EntrezIDs[,2],
                                minGSSize = 2,
-                               maxGSSize = 500,
-                               qvalueCutoff = 0.5))
+                               maxGSSize = 500))
     resKEGG <- get(outputVar)
     write.xlsx(resKEGG,
                file = file,
@@ -437,10 +572,16 @@ for (module in modulesOfInterest){
 }
 
 
+
 #-------------------------------------------------------------------------------
 # 8 - Visualizing enrichment results
 #-------------------------------------------------------------------------------
-#barplots of GO enrichment 
+
+#--------#
+#BARPLOTS
+#--------#
+
+#GO enrichment 
 
 pdf(file = paste0("Barplots of GO enrichment-",module,".pdf"))
 for (module in modulesOfInterest){
@@ -457,7 +598,7 @@ for (module in modulesOfInterest){
 }
 dev.off()
 
-#barplots of kegg enrichment
+#KEGG enrichment
 pdf(file = paste0("Barplots of KEGG enrichment-",module,".pdf"))
 for (module in modulesOfInterest){
   plotData = get(paste("eKEGG",module,sep="_"))
@@ -469,45 +610,78 @@ for (module in modulesOfInterest){
 }
 dev.off()
 
-# GO graph
+#--------#
+#DOTPLOTS
+#--------#
+
+# Enriched GO terms of level 5 or higher 
+#pdf(file = "Dotplots of GO enrichment level 5 or higher.pdf",height = 8, width = 10)
 for (module in modulesOfInterest){
-  pdf(file = paste0("GO graphs-",module,".pdf"))
   for (ont in ontologies){
+    jpeg(file = paste0("Dotplot of GO enrichment Labove3-",module,ont,".jpeg"), height = 500, width = 325)
+    plotData = get(paste("goAbove3",module,ont,sep="_"))
+    y = plotData[plotData$qvalue<0.05, asis=T]
+    a=dotplot(y, showCategory = 10) +
+      scale_y_discrete(labels = function(x) str_wrap(x, width = 20))+
+      ggplot2::labs(title=ifelse(ont=="BP", paste0("Enriched terms - Biological Pathway - ",module),
+                     ifelse(ont=="CC",paste0("Enriched terms - Cellular Component - ",module),
+                            paste0("Enriched terms - Molecular Function - ",module))))+
+      ggplot2::theme(plot.title=element_text(face="bold",hjust=0.5,vjust=0))
+    print(a)
+    dev.off()
+  }
+}
+#dev.off()
+
+
+#KEGG enrichment
+#pdf(file = paste0("Dotplots of KEGG enrichment.pdf"),height = 8, width = 10)
+for (module in modulesOfInterest){
+  jpeg(file = paste0("Dotplot of KEGG enrichment-",module,".jpeg"), height = 500, width = 300)
+  plotData = get(paste("eKEGG",module,sep="_"))
+  y = plotData[plotData$qvalue<0.05, asis=T]
+  a=dotplot(plotData, showCategory = 10) + 
+    scale_y_discrete(labels = function(x) str_wrap(x, width = 20))+
+    ggplot2::labs(title=paste0("KEGG pathway enrichment-", module))+
+    ggplot2::theme(plot.title=element_text(face="bold",hjust=0.5,vjust=0.5))
+    print(a)
+    dev.off()
+  }
+#dev.off()
+
+
+# dotplot for all three ontologies
+pdf(file = "Dotplots for all GO ontologies.pdf", width = 10)
+for (module in modulesOfInterest){
+  source = get(paste0("ego_",module,"_ALL"))
+  y = source[source$qvalue < 0.1, asis=T]
+  a = dotplot(y,split = "ONTOLOGY") + facet_grid(ONTOLOGY ~ ., scale = "free")+
+    ggplot2::labs(title=paste0("Dotplot of highly enriched terms by ontology-", module))+
+    ggplot2::theme(plot.title=element_text(face="bold",hjust=0.5,vjust=0.5))
+  print(a)
+}
+dev.off()
+
+#----------------#
+#GO network graph
+#----------------#
+
+# GO parent-child network graph
+
+for (module in modulesOfInterest){
+  for (ont in ontologies){
+    pdf(file = paste0("GO graph-",module,ont,".pdf"))
     plotData = get(paste("ego",module,ont,sep="_"))
     a=plotGOgraph(plotData)
     print(a)
-  }
-  dev.off()
-}
-
-# Dotplots of GO enrichment
-pdf(file = paste0("Dotplots of GO enrichment.pdf"),height = 8, width = 20)
-for (module in modulesOfInterest){
-  for (ont in ontologies){
-    plotData = get(paste("ego",module,ont,sep="_"))
-    a=dotplot(plotData, showCategory = 30, label_format=10) + 
-      ggplot2::labs(title=ifelse(ont=="BP", paste0("Biological Pathway-",module),
-                     ifelse(ont=="CC",paste0("Cellular Component-",module),
-                            paste0("Molecular Function-",module))))+
-      ggplot2::theme(plot.title=element_text(face="bold",hjust=0.5,vjust=0.5))
-    print(a)
+    dev.off()
   }
 }
-dev.off()
 
-# Dotplots of KEGG enrichment
-pdf(file = paste0("Dotplots of KEGG enrichment.pdf"),height = 8, width = 20)
-for (module in modulesOfInterest){
-  plotData = get(paste("eKEGG",module,sep="_"))
-    a=dotplot(plotData, showCategory = 30, label_format=10) + 
-      ggplot2::labs(title=paste0("KEGG enrichment-", module))+
-      ggplot2::theme(plot.title=element_text(face="bold",hjust=0.5,vjust=0.5),legend.position =  "none"))
-    print(a)
-  }
-dev.off()
-
-#CNET plot
-# cnetplot depicts the linkages of genes and biological concepts (e.g. GO terms
+#---------#
+#CNET plot 
+#---------#
+# cluster network plot depicts the linkages of genes and biological concepts (e.g. GO terms
 # or KEGG pathways) as a network (helpful to see which genes are involved in
 # enriched pathways and genes that may belong to multiple annotation categories).
 
@@ -525,37 +699,38 @@ for (module in modulesOfInterest){
   }
 }
 
-# cnet plot for GO
-pdf(file = paste0("CNET plot of GO terms.pdf"),height = 8, width = 20)
+# CNET plot for GO
+pdf(file = paste0("CNET plot of GO terms level 5 and higher.pdf"),height = 8, width = 20)
 for (module in modulesOfInterest){
-  #for (ont in ontology){
-    plotData = get(paste("ego",module,"ALL",sep="_"))
+  for (ont in ontology){
+    #plotData = get(paste("ego",module,ont,sep="_"))
+    if (!(module == "tan" & ont=="MF")){
+    plotData = get(paste("goAbove3",module,ont,sep="_"))
     y = plotData[plotData$qvalue < 0.1, asis=T] #
     for (disease in diseases){
       foldChange = get(paste("symbol",module,disease,sep="_"))
       ego1<-setReadable(y,'org.Hs.eg.db','ENSEMBL')
       a=cnetplot(ego1, foldChange=foldChange,showCategory = 5,categorySize="pvalue", cex_label_category=1.1, cex_label_gene = 1) + 
-        ggraph::geom_edge_link(width=0.5, alpha = 0.1) + 
-        ggplot2::labs(title=paste("Genes in top 5 enriched GO terms",module,disease,sep="-"),fill = "Fold Change")+
+        ggplot2::labs(title=paste("Genes in top 5 enriched GO terms",module,disease,ont,sep="-"),fill = "Fold Change")+
         ggplot2::theme(plot.title = element_text(size=20, face = "bold",hjust=0.5,vjust=0.5),
                        legend.title = element_text(size=13,face="bold"))
       print(a)
     }
+    }
   }
-#}
+}
 dev.off()
 
-# Need to figure out how to change node color. WHICH FOLD CHANGE TO USE? - Fold changes are significantly different between diseases
-# CNET plot for kegg
+# CNET plot for KEGG
 pdf(file = paste0("CNET plot of KEGG terms.pdf"),height = 8, width = 20)
 for (module in modulesOfInterest){
   plotData = get(paste("eKEGG",module,sep="_"))
-  y = plotData[plotData$qvalue < 0.1, asis=T] #
+  y = plotData[plotData$qvalue < 0.1, asis=T] 
   if (dim(y)[1]>0){
   for (disease in diseases){  
     foldChange = get(paste("symbol",module,disease,sep="_"))
     ego1<-setReadable(y,'org.Hs.eg.db','ENTREZID')
-    a=cnetplot1(ego1, foldChange=foldChange,categorySize = "pvalue",cex_label_category=1.2, cex_label_gene = 1 ) + 
+    a=cnetplot(ego1, foldChange=foldChange,categorySize = "pvalue",cex_label_category=1.2, cex_label_gene = 1 ) + 
       ggraph::geom_edge_link(width=0.5, alpha = 0.1) + 
       ggplot2::labs(title=paste("Genes in enriched KEGG terms with qvalue<0.1",module,disease,sep="-"))+
       ggplot2::theme(plot.title = element_text(size=20, face = "bold",hjust=0.5,vjust=0.5),
@@ -567,9 +742,13 @@ for (module in modulesOfInterest){
 dev.off()
 
 # categorySize can be scaled by 'pvalue' or 'geneNum'
-p1 <- cnetplot(ego1, categorySize="qvalue", foldChange=symbol_darkred_DCM)
-p2 <- cnetplot(ego1, foldChange=symbol_darkred_DCM, circular = TRUE, colorEdge = TRUE)
-cowplot::plot_grid(p2, p3, ncol=2, labels=LETTERS[1:3], rel_widths=c(1.2, 1.2))
+#p1 <- cnetplot(ego1, categorySize="qvalue", foldChange=symbol_darkred_DCM)
+#p2 <- cnetplot(ego1, foldChange=symbol_darkred_DCM, circular = TRUE, colorEdge = TRUE)
+#cowplot::plot_grid(p2, p3, ncol=2, labels=LETTERS[1:3], rel_widths=c(1.2, 1.2))
+
+#--------#
+#HEATPLOT
+#--------#
 
 # heat plots of genes involved in the top 30 GO terms
 pdf(file = paste0("Heatplot of genes involved in enriched GO terms.pdf"),height = 8, width = 20)
@@ -611,17 +790,9 @@ for (module in modulesOfInterest){
   }
 dev.off() 
 
-# dotplot for all three ontologies
-pdf(file = "Dotplots for all GO ontologies.pdf", width = 10)
-for (module in modulesOfInterest){
-  source = get(paste0("ego_",module,"_ALL"))
-  y = source[source$qvalue < 0.1, asis=T]
-  a = dotplot(y,split = "ONTOLOGY") + facet_grid(ONTOLOGY ~ ., scale = "free")+
-    ggplot2::labs(title=paste0("Dotplot of highly enriched terms by ontology-", module))+
-    ggplot2::theme(plot.title=element_text(face="bold",hjust=0.5,vjust=0.5))
-  print(a)
-}
-dev.off()
+#--------#
+#DAG plot
+#--------#
 
 # DAG plot - ugly plots
 pdf(file = paste0("GO DAG plots.pdf"),height = 8, width = 20)
@@ -637,7 +808,10 @@ for (module in modulesOfInterest){
   }
 }
 dev.off()
-  
+
+#---------#
+#UpSet plot
+#---------# 
 # Emphasizes the genes overlapping among different gene sets.
 pdf(file = paste0("UpSet plots.pdf"),height = 14, width = 20)
 for (module in modulesOfInterest){
@@ -653,6 +827,9 @@ for (module in modulesOfInterest){
 }
 dev.off()
 
+#---------#
+#EMAP plot
+#---------# 
 # Enrichment map organizes enriched terms into a network with edges connecting 
 #overlapping gene sets. In this way, mutually overlapping gene sets tend to 
 #cluster together, making it easy to identify functional modules.
@@ -674,6 +851,12 @@ for (module in modulesOfInterest) {
     }
 }
 dev.off()
+
+save(modulesOfInterest,ontologies,ego_darkred_BP,ego_darkred_ALL,ego_darkred_CC,
+     ego_darkred_MF,ego_tan_ALL,ego_tan_BP,ego_tan_CC,ego_tan_MF,eKEGG_tan,eKEGG_darkred,
+     fcData_darkred_DCM,fcData_darkred_HCM,fcData_darkred_PPCM,fcData_tan_DCM,fcData_tan_HCM,
+     fcData_tan_PPCM,symbol_darkred_DCM,symbol_darkred_HCM,symbol_darkred_PPCM,symbol_tan_DCM,
+     symbol_tan_HCM,symbol_tan_PPCM, file="data required for plots.RData")
 
 #-------------------------------------------------------------------------------
 # 9 - GSEA (GO and KEGG) of WGCNA modules - clusterprofiler
@@ -909,8 +1092,10 @@ for (module in modulesOfInterest){
     outputVar <- paste("allRes",module,ont,sep="_") #setting output variable name
     file <- paste("TopGO_Results_",module,".xlsx", sep="") #setting file name
     print(ont)
-    dataForTopGO <- annFUN.org(ont, mapping = "org.Hs.eg.db", ID = "ensembl")
-    universeGenes <- unique(unlist(dataForTopGO))
+   # dummy1 <- convertToEntrez(InterestingGenes)
+   # InterestingGenes<- dummy1[,2]
+   # dataForTopGO <- convertToEntrez(row.names(gxData))
+    universeGenes <- row.names(gxData)
     factorGenesTopGO <- factor(as.integer(universeGenes %in% InterestingGenes))
     names(factorGenesTopGO) <- universeGenes
     GOdata <- new("topGOdata",
@@ -949,7 +1134,7 @@ for (module in modulesOfInterest){
 #-------------------------------------------------------------------------------
 
 #running pathfindR on all modules - PIN=STRING, GSET=KEGG. 
-for (module in c("darkred","tan")){# modulesOfInterest){
+for (module in modulesOfInterest){
   for (disease in diseases){
     dirEnd <- paste("pathfindr",module,disease,sep="_")
     dir <- paste0("C:/Users/kaila/Documents/MSc/Period 2/Experimental methods and data management/R skill sessions/Data/pathfindR_PINstring_genesetKEGG/",dirEnd)
@@ -1102,9 +1287,30 @@ for (module in modulesOfInterest){
                                  high = "#1f4037")) # default = "red"
     }
   }
-}
 dev.off()
 
+for (module in modulesOfInterest){
+  for (disease in diseases){
+    dirEnd <- paste("pathfindr",module,disease,sep="_")
+    dir <- paste0("C:/Users/kaila/Documents/MSc/Period 2/Experimental methods and data management/R skill sessions/Data/pathfindR_PINstring_genesetGOALL/",dirEnd)
+    source <- get(paste("fcData",module,disease,sep="_"))
+    dummy1 <- source[,1]
+    dummy1 <- convertToSymbol(dummy1)
+    dummy2 <- cbind(dummy1,source[source$EnsemblID %in% dummy1[,1],])
+    source <- dummy2[,c(2,4,5)]
+    outputVar <- paste("pathRes",module,disease,sep="_")
+    assign(outputVar, run_pathfindR(source,
+                                    p_val_threshold = 0.05,
+                                    convert2alias = TRUE,
+                                    pin_name_path = "STRING", # Name of the chosen PIN - "Biogrid", "STRING", "GeneMania", "IntAct", "KEGG"
+                                    sig_gene_thr = 0.02, # Threshold for minimum proportion of significant genes used in filtering active subnetworks
+                                    gene_sets = "GO-All", # gene set used for enrichment analysis - "KEGG", "Reactome", "BioCarta", "GO-All", "GO-BP", "GO-CC", "GO-MF"
+                                    min_gset_size = 10,
+                                    max_gset_size = 500,
+                                    output_dir = dir,
+                                    plot_enrichment_chart = TRUE))
+  }
+}
 #-------------------------------------------------------------------------------
 # 13 - Compare any two module pathfindR results
 #-------------------------------------------------------------------------------
@@ -1123,124 +1329,35 @@ combined_results_graph(combined_df,
 
 
 
-
 #-------------------------------------------------------------------------------
-# Functions
+# 14 - Identifying GO terms which contain hub genes 
 #-------------------------------------------------------------------------------
+hubGenesdarkred<- c("ENSG00000182866","ENSG00000116824","ENSG00000115085","ENSG00000198821","ENSG00000153563",
+  "ENSG00000167286" ,"ENSG00000198851" ,"ENSG00000100385" ,"ENSG00000160654",
+  "ENSG00000223865", "ENSG00000204287","ENSG00000163599" ,"ENSG00000231389")
+hubGenestan <- c("ENSG00000187955" ,"ENSG00000106809", "ENSG00000169436", "ENSG00000111799", "ENSG00000112280",
+                 "ENSG00000198756")
 
-# For pathfindR term-gene graph
-{
-  term_gene_graph1 = function (result_df, num_terms = 10, layout = "stress", 
-          use_description = FALSE, node_size = "num_genes") 
-{
-  if (!is.numeric(num_terms) & !is.null(num_terms)) {
-    stop("`num_terms` must either be numeric or NULL!")
+for (module in modulesOfInterest){
+  for (ont in ontology){
+    outputVar = paste(module, "ego", ont, sep="_")
+    source = get(paste("ego",module,ont,sep="_"))
+    source = gofilter(source, level=4)
+    assign(outputVar, as.data.frame(source))
   }
-  if (!is.logical(use_description)) {
-    stop("`use_description` must either be TRUE or FALSE!")
-  }
-  ID_column <- ifelse(use_description, "Term_Description", 
-                      "ID")
-  val_node_size <- c("num_genes", "p_val")
-  if (!node_size %in% val_node_size) {
-    stop("`node_size` should be one of ", paste(dQuote(val_node_size), 
-                                                collapse = ", "))
-  }
-  if (!is.data.frame(result_df)) 
-    stop("`result_df` should be a data frame")
-  necessary_cols <- c(ID_column, "lowest_p", "Up_regulated", 
-                      "Down_regulated")
-  if (!all(necessary_cols %in% colnames(result_df))) {
-    stop(paste(c("All of", paste(necessary_cols, collapse = ", "), 
-                 "must be present in `results_df`!"), collapse = " "))
-  }
-  if (!is.null(num_terms)) {
-    if (nrow(result_df) < num_terms) {
-      num_terms <- NULL
-    }
-  }
-  result_df <- result_df[order(result_df$lowest_p, decreasing = FALSE), 
-  ]
-  if (!is.null(num_terms)) {
-    result_df <- result_df[1:num_terms, ]
-  }
-  graph_df <- data.frame()
-  for (i in base::seq_len(nrow(result_df))) {
-    up_genes <- unlist(strsplit(result_df$Up_regulated[i], 
-                                ", "))
-    down_genes <- unlist(strsplit(result_df$Down_regulated[i], 
-                                  ", "))
-    genes <- c(up_genes, down_genes)
-    for (gene in genes) {
-      graph_df <- rbind(graph_df, data.frame(Term = result_df[i, 
-                                                              ID_column], Gene = gene))
-    }
-  }
-  up_genes <- lapply(result_df$Up_regulated, function(x) unlist(strsplit(x, 
-                                                                         ", ")))
-  up_genes <- unlist(up_genes)
-  g <- igraph::graph_from_data_frame(graph_df, directed = FALSE)
-  cond_term <- names(igraph::V(g)) %in% result_df[, ID_column]
-  cond_up_gene <- names(igraph::V(g)) %in% up_genes
-  igraph::V(g)$type <- ifelse(cond_term, "term", ifelse(cond_up_gene, 
-                                                        "up", "down"))
-  if (node_size == "num_genes") {
-    sizes <- igraph::degree(g)
-    sizes <- ifelse(igraph::V(g)$type == "term", sizes, 
-                    2)
-    size_label <- "Number of genes"
-  }
-  else {
-    idx <- match(names(igraph::V(g)), result_df[, ID_column])
-    sizes <- -log10(result_df$lowest_p[idx])
-    sizes[is.na(sizes)] <- 2
-    size_label <- "-log10(p)"
-  }
-  igraph::V(g)$size <- sizes
-  igraph::V(g)$label.cex <- 0.5
-  igraph::V(g)$frame.color <- "gray"
-  igraph::V(g)$color <- ifelse(igraph::V(g)$type == "term", 
-                               "#F0A062", ifelse(igraph::V(g)$type == "up", 
-                                                 "green", "red"))
-  p <- ggraph::ggraph(g, layout = layout)
-  p <- p + ggraph::geom_edge_link(alpha = 0.4, colour = "darkgrey")
-  p <- p + ggraph::geom_node_point(ggplot2::aes_(color = ~I(color), 
-                                                 size = ~size))
-  p <- p + ggplot2::scale_size(range = c(5, 10), breaks = round(seq(round(min(igraph::V(g)$size)), 
-                                                                    round(max(igraph::V(g)$size)), length.out = 4)), name = size_label)
-  p <- p + ggplot2::theme_void()
-  p <- p + ggraph::geom_node_text(ggplot2::aes_(label = ~name),repel=T, 
-                                  nudge_y = 0)
-  p <- p + ggplot2::scale_colour_manual(values = unique(igraph::V(g)$color), 
-                                        name = NULL, labels = c("Enriched term", "Up-regulated gene", 
-                                                                "Down-regulated gene"))
-  if (is.null(num_terms)) {
-    p <- p + ggplot2::ggtitle("Term-Gene Graph")
-  }
-  else {
-    p <- p + ggplot2::ggtitle("Term-Gene Graph", subtitle = paste(c("Top", 
-                                                                    num_terms, "terms"), collapse = " "))
-  }
-  p <- p + ggplot2::theme(plot.title = ggplot2::element_text(hjust = 0.5), 
-                          plot.subtitle = ggplot2::element_text(hjust = 0.5))
-  return(p)
-}
 }
 
+for (module in modulesOfInterest){
+  hubgenes <- get(paste0("hubGenes",module))
+  for (ont in ontology){
+    sourceDF = get(paste(module,"ego",ont,sep="_"))
+    split = strsplit(as.character(sourceDF[,8]),"/")
+    for (i in 1:nrow(sourceDF)){
+      sourceDF[i,10] = length(intersect(hubgenes,split[[i]]))
+      colnames(sourceDF)[10] = "intersect"
+      assign(paste(module,"ego",ont,sep="_"),sourceDF)
+    }
+  }
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+a = darkred_ego_BP[darkred_ego_BP$intersect>=5,]
